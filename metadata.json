@@ -1,0 +1,9 @@
+{
+  "name": "Agen Perubahan PA Prabumulih",
+  "description": "Aplikasi pemilihan Agen Perubahan Pengadilan Agama Prabumulih dengan antarmuka media sosial.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ]
+}

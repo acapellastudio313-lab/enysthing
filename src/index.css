@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-progress: progress 5s linear forwards;
+
+  @keyframes progress {
+    0% { width: 0%; }
+    100% { width: 100%; }
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
