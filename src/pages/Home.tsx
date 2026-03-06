@@ -3,7 +3,7 @@ import { User, Post } from '../types';
 import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock } from 'lucide-react';
 import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
-import { formatDateWIB } from '../utils';
+import { formatDateWIB, compressImage } from '../utils';
 import { createPost, listenToPosts, listenToSettings, likePost, pinPost } from '../lib/db';
 
 export default function Home({ user }: { user: User }) {
@@ -29,7 +29,13 @@ export default function Home({ user }: { user: User }) {
 
   useEffect(() => {
     const unsubscribePosts = listenToPosts((fetchedPosts) => {
-      setPosts(fetchedPosts);
+      // Ensure uniqueness
+      const uniquePosts = fetchedPosts.filter((post, index, self) => 
+        index === self.findIndex((t) => (
+          t.id === post.id
+        ))
+      );
+      setPosts(uniquePosts);
       setLoading(false);
     });
 
@@ -207,45 +213,22 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
         alert('Ukuran gambar maksimal 5MB');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800;
-          const MAX_HEIGHT = 800;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          setImageUrl(dataUrl);
-          setShowImageInput(true);
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+      
+      try {
+        const compressedUrl = await compressImage(file);
+        setImageUrl(compressedUrl);
+        setShowImageInput(true);
+      } catch (error) {
+        console.error('Error compressing image:', error);
+        alert('Gagal memproses gambar');
+      }
     }
   };
 

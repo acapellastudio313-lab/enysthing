@@ -85,7 +85,7 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null | 'new'>(null);
   const [candidateForm, setCandidateForm] = useState({ name: '', username: '', avatar: '', vision: '', mission: '', innovation_program: '', image_url: '' });
-  const [selectedUserId, setSelectedUserId] = useState<string | ''>('');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
   const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
@@ -412,7 +412,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       role: u.role,
       is_verified: u.is_verified || 0,
       is_approved: u.is_approved !== undefined ? u.is_approved : 1,
-      password: ''
+      password: u.password || ''
     });
   };
 
@@ -511,7 +511,7 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const handleAddCandidate = () => {
     setEditingCandidate('new');
-    setSelectedUserId('');
+    setSelectedUserIds([]);
     setCandidateForm({
       name: '',
       username: '',
@@ -531,17 +531,19 @@ export default function AdminDashboard({ user }: { user: User }) {
       const isNew = editingCandidate === 'new';
       
       if (isNew) {
-        if (!selectedUserId) {
-          alert('Silakan pilih pengguna terlebih dahulu');
+        if (selectedUserIds.length === 0) {
+          alert('Silakan pilih minimal satu pengguna');
           return;
         }
         
-        await addCandidate(selectedUserId, {
-          vision: '',
-          mission: '',
-          innovation_program: '',
-          image_url: ''
-        });
+        for (const uid of selectedUserIds) {
+            await addCandidate(uid, {
+              vision: '',
+              mission: '',
+              innovation_program: '',
+              image_url: ''
+            });
+        }
         fetchCandidates();
         fetchUsers();
         setEditingCandidate(null);
@@ -1412,14 +1414,31 @@ export default function AdminDashboard({ user }: { user: User }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Password (Kosongkan jika tidak ingin mengubah)</label>
-                <input
-                  type="password"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                  value={editForm.password}
-                  onChange={e => setEditForm({...editForm, password: e.target.value})}
-                  placeholder="Masukkan password baru"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none pr-16"
+                    value={editForm.password}
+                    onChange={e => setEditForm({...editForm, password: e.target.value})}
+                    placeholder="Password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                      let pass = "";
+                      for (let i = 0; i < 8; i++) {
+                        pass += chars.charAt(Math.floor(Math.random() * chars.length));
+                      }
+                      setEditForm({...editForm, password: pass});
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-slate-600 font-medium transition-colors"
+                  >
+                    Generate
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Password saat ini ditampilkan. Ubah untuk mengganti.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Bio</label>
@@ -1560,20 +1579,35 @@ export default function AdminDashboard({ user }: { user: User }) {
             <form onSubmit={handleSaveCandidate} className="p-4 space-y-4">
               {editingCandidate === 'new' ? (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Pilih Pengguna</label>
-                  <select
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={selectedUserId}
-                    onChange={e => setSelectedUserId(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Pilih Pengguna --</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} (@{u.username}) - {u.role}
-                      </option>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Pilih Pengguna (Bisa lebih dari satu)</label>
+                  <div className="max-h-60 overflow-y-auto border border-slate-300 rounded-xl p-2 space-y-1">
+                    {users.filter(u => u.role !== 'candidate').map(u => (
+                      <label key={u.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            checked={selectedUserIds.includes(u.id)}
+                            onChange={(e) => {
+                                if (e.target.checked) {
+                                    setSelectedUserIds([...selectedUserIds, u.id]);
+                                } else {
+                                    setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
+                                }
+                            }}
+                            className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                        />
+                        <div className="flex items-center gap-2">
+                            <img src={u.avatar} alt={u.name} className="w-6 h-6 rounded-full" />
+                            <div>
+                                <p className="text-sm font-medium text-slate-900">{u.name}</p>
+                                <p className="text-xs text-slate-500">@{u.username}</p>
+                            </div>
+                        </div>
+                      </label>
                     ))}
-                  </select>
+                    {users.filter(u => u.role !== 'candidate').length === 0 && (
+                        <p className="text-sm text-slate-500 text-center py-4">Tidak ada pengguna yang tersedia untuk dijadikan kandidat.</p>
+                    )}
+                  </div>
                   <p className="mt-2 text-sm text-slate-500">
                     Pengguna yang dipilih akan dipromosikan menjadi kandidat. Anda dapat melengkapi visi & misi setelah kandidat ditambahkan.
                   </p>

@@ -3,7 +3,7 @@ import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { User, Story } from '../types';
 import { Plus, X, Image as ImageIcon, Video as VideoIcon, Camera, Type, AtSign, Eye, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatDateWIB } from '../utils';
+import { formatDateWIB, compressImage } from '../utils';
 import { clsx } from 'clsx';
 import { toast } from 'sonner';
 import { createStory, listenToStories, deleteStory, search, viewStory } from '../lib/db';
@@ -32,7 +32,18 @@ function StoryViewer({
   const [isPaused, setIsPaused] = useState(false);
   
   const currentGroup = storyGroups[groupIndex];
+  // Guard against deleted stories/groups
+  if (!currentGroup) {
+    onClose();
+    return null;
+  }
+  
   const currentStory = currentGroup.stories[storyIndex];
+  if (!currentStory) {
+    onClose();
+    return null;
+  }
+
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const [showViewers, setShowViewers] = useState(false);
@@ -161,10 +172,6 @@ function StoryViewer({
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center"
     >
-      <button onClick={onClose} className="absolute top-4 right-4 text-white p-2 z-[60] bg-black/50 rounded-full hover:bg-black/80 transition-colors flex items-center gap-2 px-4">
-        <X className="w-5 h-5" />
-        <span className="text-sm font-medium">Tutup</span>
-      </button>
       
       <div 
         className="w-full max-w-md h-full sm:h-[90vh] sm:rounded-2xl overflow-hidden relative bg-slate-900 flex items-center justify-center"
@@ -186,27 +193,30 @@ function StoryViewer({
         </div>
 
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 pt-6 px-4 pb-4 bg-gradient-to-b from-black/60 to-transparent z-30 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="absolute top-0 left-0 right-0 pt-6 px-4 pb-12 bg-gradient-to-b from-black/60 to-transparent z-30 flex items-start justify-between pointer-events-none">
+          <div className="flex items-center gap-3 pointer-events-auto">
             <img src={currentGroup.user_avatar} alt={currentGroup.user_name} className="w-10 h-10 rounded-full border border-white/20" />
             <div>
               <p className="text-white font-bold text-sm">{currentGroup.user_name}</p>
               <p className="text-white/70 text-xs">{formatDateWIB(currentStory.created_at)}</p>
             </div>
-            
-            {(Number(currentStory.user_id) === Number(currentUser.id) || currentUser.role === 'admin') && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
-                disabled={isDeleting}
-                className="p-2 text-white/70 hover:text-red-500 transition-colors ml-2"
-                title="Hapus Cerita"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            )}
           </div>
           
-          {/* Close button is outside this header, fixed at top right */}
+          <div className="flex items-center gap-2 pointer-events-auto">
+             {(Number(currentStory.user_id) === Number(currentUser.id) || currentUser.role === 'admin') && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
+                  disabled={isDeleting}
+                  className="p-2 text-white/80 hover:text-red-500 hover:bg-white/10 rounded-full transition-colors"
+                  title="Hapus Cerita"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+             )}
+             <button onClick={onClose} className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                <X className="w-6 h-6" />
+             </button>
+          </div>
         </div>
 
         {/* Tap Areas */}
@@ -271,9 +281,9 @@ function StoryViewer({
             {/* Tags */}
             {currentStory.tags && currentStory.tags.length > 0 && (
               <>
-                {currentStory.tags.map(tag => (
+                {currentStory.tags.map((tag, idx) => (
                   <div 
-                    key={tag.id} 
+                    key={`${tag.id}-${idx}`} 
                     className="absolute bg-black/50 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 backdrop-blur-sm z-20"
                     style={{
                       transform: `translate(${tag.x || 0}px, ${tag.y || 0}px)`
@@ -290,10 +300,10 @@ function StoryViewer({
 
         {/* Viewers Button (Author Only) */}
         {currentStory.user_id === currentUser.id && (
-          <div className="absolute bottom-4 left-0 right-0 flex justify-center z-30">
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center z-30 pointer-events-none">
             <button 
               onClick={(e) => { e.stopPropagation(); setShowViewers(true); setIsPaused(true); }}
-              className="flex items-center gap-2 bg-black/50 text-white px-4 py-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition-colors"
+              className="flex items-center gap-2 bg-black/50 text-white px-4 py-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition-colors pointer-events-auto"
             >
               <Eye className="w-4 h-4" />
               <span className="text-sm font-medium">{currentStory.views?.filter(v => v.id !== currentUser.id).length || 0} Tayangan</span>
@@ -347,6 +357,7 @@ function StoryViewer({
 
 export default function Stories({ user }: { user: User }) {
   const [stories, setStories] = useState<Story[]>([]);
+  const [storyGroups, setStoryGroups] = useState<StoryGroup[]>([]);
   const [activeStoryGroupIndex, setActiveStoryGroupIndex] = useState<number | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -363,7 +374,7 @@ export default function Stories({ user }: { user: User }) {
   const [tempColor, setTempColor] = useState('#ffffff');
   
   // Tagging State
-  const [taggedUsers, setTaggedUsers] = useState<{id: number, username: string, name: string, x: number, y: number}[]>([]);
+  const [taggedUsers, setTaggedUsers] = useState<{id: string, username: string, name: string, x: number, y: number}[]>([]);
   const [isTagging, setIsTagging] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
   const [tagSuggestions, setTagSuggestions] = useState<User[]>([]);
@@ -378,49 +389,71 @@ export default function Stories({ user }: { user: User }) {
   const isLongPress = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = listenToStories((fetchedStories) => {
-      setStories(fetchedStories);
+    const unsubscribe = listenToStories((data) => {
+      // Ensure unique stories
+      const uniqueStories = data.filter((story, index, self) => 
+        index === self.findIndex((t) => (
+          t.id === story.id
+        ))
+      );
+      setStories(uniqueStories);
+      
+      // Group stories by user
+      const groups: { [key: string]: StoryGroup } = {};
+      uniqueStories.forEach(story => {
+        if (!groups[story.user_id]) {
+          groups[story.user_id] = {
+            user_id: story.user_id,
+            user_name: story.user_name,
+            user_avatar: story.user_avatar,
+            stories: []
+          };
+        }
+        groups[story.user_id].stories.push(story);
+      });
+      
+      setStoryGroups(Object.values(groups));
     });
+
     return () => unsubscribe();
   }, []);
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    try {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Ukuran file maksimal 10MB');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      const isVideo = file.type.startsWith('video/');
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setUploadMedia({ url: event.target.result as string, type: isVideo ? 'video' : 'image' });
-          setShowUpload(true);
-          stopCamera();
-        }
-        // Reset input after successful read
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      };
-      reader.onerror = () => {
-        alert('Gagal membaca file. Silakan coba lagi.');
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error handling file:', error);
-      alert('Terjadi kesalahan saat memilih file.');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+    // Reset input value to allow selecting same file again
+    e.target.value = '';
+
+    if (file.size > 1 * 1024 * 1024) {
+      toast.error('Ukuran file maksimal 1MB (Batasan Firestore)');
+      return;
+    }
+
+    try {
+      let result: string;
+      if (file.type.startsWith('image/')) {
+        // Compress image
+        result = await compressImage(file);
+      } else {
+        // Read video as data URL
+        const reader = new FileReader();
+        result = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
       }
+      
+      setUploadMedia({
+        type: file.type.startsWith('video/') ? 'video' : 'image',
+        url: result
+      });
+      setShowUpload(true);
+      stopCamera();
+    } catch (error) {
+      console.error('Error reading file:', error);
+      toast.error('Gagal memproses file');
     }
   };
 
@@ -585,20 +618,7 @@ export default function Stories({ user }: { user: User }) {
     }
   };
 
-  const groupedStories = stories.reduce((acc, story) => {
-    if (!acc[story.user_id]) {
-      acc[story.user_id] = {
-        user_id: story.user_id,
-        user_name: story.user_name,
-        user_avatar: story.user_avatar,
-        stories: []
-      };
-    }
-    acc[story.user_id].stories.push(story);
-    return acc;
-  }, {} as Record<string, StoryGroup>);
 
-  const storyGroups: StoryGroup[] = Object.values(groupedStories);
 
   useEffect(() => {
     if (showCamera && !cameraStream) {
@@ -636,22 +656,25 @@ export default function Stories({ user }: { user: User }) {
 
         {/* Story List */}
         {storyGroups.map((group, index) => {
-          const allViewed = group.stories.every(story => story.views?.some(v => v.id === user.id));
+          // Check if ALL stories in this group have been viewed by current user
+          // We check the 'views' array in each story
+          const allViewed = group.stories.every(story => {
+            const views = story.views || [];
+            return views.some(v => v.id === user.id);
+          });
+          
           return (
             <div key={group.user_id} className="flex flex-col items-center gap-1 shrink-0 cursor-pointer" onClick={() => {
               setActiveStoryGroupIndex(index);
             }}>
               <div className={clsx(
-                "w-16 h-16 rounded-full flex items-center justify-center",
-                !allViewed ? "p-0.5 bg-gradient-to-tr from-yellow-400 to-fuchsia-600" : ""
+                "w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300",
+                !allViewed ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-orange-500 to-fuchsia-600" : "p-[1px] bg-slate-200"
               )}>
                 <img 
                   src={group.user_avatar} 
                   alt={group.user_name} 
-                  className={clsx(
-                    "w-full h-full rounded-full object-cover",
-                    !allViewed ? "border-2 border-white" : "border border-slate-200"
-                  )}
+                  className="w-full h-full rounded-full object-cover border-2 border-white"
                 />
               </div>
               <span className="text-xs font-medium text-slate-600 truncate w-16 text-center">{group.user_name.split(' ')[0]}</span>
@@ -777,7 +800,7 @@ export default function Stories({ user }: { user: User }) {
                   <>
                     {taggedUsers.map((tag, idx) => (
                       <motion.div 
-                        key={tag.id}
+                        key={`${tag.id}-${idx}`}
                         drag
                         dragMomentum={false}
                         onDragEnd={(e, info) => {

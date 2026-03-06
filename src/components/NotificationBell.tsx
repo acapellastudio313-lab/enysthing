@@ -78,7 +78,7 @@ export default function NotificationBell({ user }: { user: User }) {
               ) : (
                 notifications.map((notification) => (
                   <Link 
-                    to={notification.type === 'register' ? `/admin/users` : notification.type === 'story_tag' ? '/' : `/post/${notification.post_id}`} 
+                    to={notification.type === 'register' ? `/admin/users` : notification.type === 'story_tag' ? '/' : (notification.post_id ? `/post/${notification.post_id}` : '/')} 
                     key={notification.id} 
                     onClick={() => setIsOpen(false)}
                     className={clsx(
@@ -87,7 +87,7 @@ export default function NotificationBell({ user }: { user: User }) {
                     )}
                   >
                     <div className="relative shrink-0">
-                      <img src={notification.actor_avatar} alt={notification.actor_name} className="w-10 h-10 rounded-full" />
+                      <img src={notification.from_user_avatar || notification.actor_avatar} alt={notification.from_user_name || notification.actor_name} className="w-10 h-10 rounded-full" />
                       <div className={clsx(
                         "absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white",
                         notification.type === 'like' ? "bg-pink-500" : 
@@ -104,7 +104,7 @@ export default function NotificationBell({ user }: { user: User }) {
                     
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-900 leading-snug">
-                        <span className="font-bold">{notification.actor_name}</span>
+                        <span className="font-bold">{notification.from_user_name || notification.actor_name}</span>
                         {notification.type === 'like' && ' menyukai postingan Anda.'}
                         {notification.type === 'comment' && ' mengomentari postingan Anda.'}
                         {notification.type === 'register' && ' mendaftar sebagai pengguna baru.'}

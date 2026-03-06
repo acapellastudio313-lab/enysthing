@@ -222,8 +222,29 @@ export const deleteStory = async (storyId: string) => {
 };
 
 export const viewStory = async (storyId: string, userId: string) => {
-  const viewRef = doc(db, "stories", storyId, "views", userId);
-  await setDoc(viewRef, { viewed_at: serverTimestamp() });
+  const user = await getUser(userId);
+  if (!user) return;
+
+  const viewData = {
+    id: user.id,
+    name: user.name,
+    avatar: user.avatar,
+    viewed_at: new Date().toISOString()
+  };
+
+  const storyRef = doc(db, "stories", storyId);
+  const storySnap = await getDoc(storyRef);
+  
+  if (storySnap.exists()) {
+    const data = storySnap.data();
+    const views = data.views || [];
+    // Check if user already viewed to avoid duplicates
+    if (!views.some((v: any) => v.id === userId)) {
+      await updateDoc(storyRef, {
+        views: arrayUnion(viewData)
+      });
+    }
+  }
 };
 
 // Realtime Listeners
