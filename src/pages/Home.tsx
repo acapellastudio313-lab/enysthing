@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent, useRef, ChangeEvent } from 'react';
 import { User, Post } from '../types';
-import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock } from 'lucide-react';
+import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock, Video, FileText } from 'lucide-react';
 import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
 import { formatDateWIB, compressImage } from '../utils';
@@ -14,6 +14,12 @@ export default function Home({ user }: { user: User }) {
   const [imageUrl, setImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [documentName, setDocumentName] = useState<string | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -199,12 +205,17 @@ export default function Home({ user }: { user: User }) {
         author_id: user.id, 
         content: newPost, 
         image_url: finalImageUrl,
+        video_url: videoUrl,
+        document_url: documentUrl,
         audio_url: finalAudioUrl
       });
 
       setNewPost('');
       setImageUrl('');
       setShowImageInput(false);
+      setVideoUrl(null);
+      setDocumentUrl(null);
+      setDocumentName(null);
       setAudioBlob(null);
       setAudioUrl(null);
     } catch (error) {
@@ -229,6 +240,39 @@ export default function Home({ user }: { user: User }) {
         console.error('Error compressing image:', error);
         alert('Gagal memproses gambar');
       }
+    }
+  };
+
+  const handleVideoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Ukuran video maksimal 10MB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setVideoUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDocumentUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Ukuran dokumen maksimal 5MB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setDocumentUrl(reader.result as string);
+        setDocumentName(file.name);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -353,6 +397,38 @@ export default function Home({ user }: { user: User }) {
               </div>
             )}
 
+            {videoUrl && (
+              <div className="mb-3 relative inline-block">
+                <video src={videoUrl} controls className="max-h-48 rounded-xl bg-black" />
+                <button 
+                  type="button" 
+                  onClick={() => setVideoUrl(null)}
+                  className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full hover:bg-black/70"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {documentUrl && (
+              <div className="mb-3 relative inline-flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="p-2 bg-white rounded-lg border border-slate-200">
+                  <FileText className="w-6 h-6 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0 pr-8">
+                  <p className="font-medium text-slate-900 truncate">{documentName || 'Dokumen'}</p>
+                  <p className="text-xs text-slate-500">Siap diunggah</p>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => { setDocumentUrl(null); setDocumentName(null); }}
+                  className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {isRecording && (
               <div className="mb-3 flex items-center gap-3 bg-red-50 text-red-600 px-4 py-3 rounded-2xl border border-red-100 shadow-sm animate-pulse">
                 <div className="relative flex items-center justify-center">
@@ -398,6 +474,20 @@ export default function Home({ user }: { user: User }) {
                   accept="image/*" 
                   className="hidden" 
                 />
+                <input 
+                  type="file" 
+                  ref={videoInputRef} 
+                  onChange={handleVideoUpload} 
+                  accept="video/*" 
+                  className="hidden" 
+                />
+                <input 
+                  type="file" 
+                  ref={documentInputRef} 
+                  onChange={handleDocumentUpload} 
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" 
+                  className="hidden" 
+                />
                 <button 
                   type="button" 
                   onClick={() => fileInputRef.current?.click()}
@@ -405,6 +495,22 @@ export default function Home({ user }: { user: User }) {
                   title="Unggah Gambar"
                 >
                   <ImageIcon className="w-6 h-6 md:w-6 md:h-6" />
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => videoInputRef.current?.click()}
+                  className={`p-3 md:p-2.5 rounded-full transition-all active:scale-95 touch-manipulation ${videoUrl ? 'text-emerald-600 bg-emerald-50 ring-2 ring-emerald-100' : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'}`}
+                  title="Unggah Video"
+                >
+                  <Video className="w-6 h-6 md:w-6 md:h-6" />
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => documentInputRef.current?.click()}
+                  className={`p-3 md:p-2.5 rounded-full transition-all active:scale-95 touch-manipulation ${documentUrl ? 'text-emerald-600 bg-emerald-50 ring-2 ring-emerald-100' : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'}`}
+                  title="Unggah Dokumen"
+                >
+                  <FileText className="w-6 h-6 md:w-6 md:h-6" />
                 </button>
                 <button 
                   type="button" 
@@ -417,7 +523,7 @@ export default function Home({ user }: { user: User }) {
               </div>
               <button
                 type="submit"
-                disabled={(!newPost.trim() && !imageUrl && !audioUrl) || isRecording}
+                disabled={(!newPost.trim() && !imageUrl && !audioUrl && !videoUrl && !documentUrl) || isRecording}
                 className="bg-emerald-600 text-white px-4 md:px-6 py-1.5 md:py-2 rounded-full font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Posting

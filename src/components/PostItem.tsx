@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { User, Post, Comment } from '../types';
-import { Heart, MessageCircle, Share2, Send, CheckCircle, X, Pin, Edit, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Send, CheckCircle, X, Pin, Edit, Trash2, FileText, Video } from 'lucide-react';
 import { formatDateWIB } from '../utils';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import EditPostModal from './EditPostModal';
 import { toast } from 'sonner';
-import { addComment, listenToComments, likePost, checkIsLiked, deletePost, deleteComment, updateComment } from '../lib/db';
+import { addComment, listenToComments, likePost, checkIsLiked, deletePost, deleteComment, updateComment, getPostLikers } from '../lib/db';
 
 interface PostItemProps {
   key?: number | string;
@@ -33,6 +33,8 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState('');
   const [isLiked, setIsLiked] = useState(false);
+  const [showLikers, setShowLikers] = useState(false);
+  const [likers, setLikers] = useState<User[]>([]);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -78,6 +80,17 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
       onLike(post.id);
     } catch (error) {
       console.error('Error liking post:', error);
+    }
+  };
+
+  const handleShowLikers = async () => {
+    if (post.likes_count === 0) return;
+    setShowLikers(true);
+    try {
+      const users = await getPostLikers(post.id);
+      setLikers(users);
+    } catch (error) {
+      console.error('Error fetching likers:', error);
     }
   };
 
@@ -172,6 +185,31 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
             </div>
           )}
 
+          {post.video_url && (
+            <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-black">
+              <video src={post.video_url} controls className="w-full h-auto max-h-[500px]" />
+            </div>
+          )}
+
+          {post.document_url && (
+            <div className="mt-3">
+              <a 
+                href={post.document_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
+              >
+                <div className="p-2 bg-white rounded-lg border border-slate-200">
+                  <FileText className="w-6 h-6 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-slate-900 truncate">Dokumen Lampiran</p>
+                  <p className="text-xs text-slate-500">Klik untuk melihat</p>
+                </div>
+              </a>
+            </div>
+          )}
+
           {post.audio_url && (
             <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 p-2">
               <audio src={post.audio_url} controls className="w-full h-10" />
@@ -208,7 +246,12 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
               )}>
                 <Heart className={clsx("w-4 h-4 md:w-5 md:h-5", isLiked && "fill-current")} />
               </div>
-              <span className="text-xs md:text-sm">{post.likes_count > 0 ? post.likes_count : ''}</span>
+            </button>
+            <button
+              onClick={handleShowLikers}
+              className="text-xs md:text-sm text-slate-500 hover:underline -ml-1"
+            >
+              {post.likes_count > 0 ? post.likes_count : ''}
             </button>
 
             <button 
@@ -243,6 +286,43 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
           </div>
         </div>
       </div>
+
+      {/* Likers Modal */}
+      <AnimatePresence>
+        {showLikers && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setShowLikers(false)}
+          >
+            <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="font-bold text-slate-900">Disukai oleh</h3>
+                <button onClick={() => setShowLikers(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
+                {likers.length === 0 ? (
+                  <p className="text-center text-slate-500 text-sm">Memuat...</p>
+                ) : (
+                  likers.map(liker => (
+                    <Link to={`/profile/${liker.id}`} key={liker.id} className="flex items-center gap-3 hover:bg-slate-50 p-2 rounded-xl transition-colors">
+                      <img src={liker.avatar} alt={liker.name} className="w-10 h-10 rounded-full" />
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{liker.name}</p>
+                        <p className="text-slate-500 text-xs">@{liker.username}</p>
+                      </div>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showComments && (

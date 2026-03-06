@@ -70,6 +70,8 @@ export interface Post {
   author_id: string;
   content: string;
   image_url: string | null;
+  video_url?: string | null;
+  document_url?: string | null;
   audio_url?: string | null;
   is_pinned?: number;
   created_at: string;
@@ -105,14 +107,18 @@ export interface LeaderboardEntry {
 export interface Notification {
   id: string;
   user_id: string;
-  actor_id: string;
+  actor_id?: string;
+  from_user_id?: string;
   type: 'like' | 'comment' | 'register' | 'story_tag';
   post_id?: string;
   story_id?: string;
   is_read: number;
   created_at: string;
-  actor_name: string;
-  actor_avatar: string;
+  actor_name?: string;
+  actor_avatar?: string;
+  from_user_name?: string;
+  from_user_avatar?: string;
+  message?: string;
 }
 
 export interface Message {
@@ -120,6 +126,8 @@ export interface Message {
   sender_id: string;
   receiver_id: string;
   text: string;
+  attachment_url?: string;
+  attachment_type?: 'image' | 'video' | 'document';
   created_at: string;
   is_read: number;
 }

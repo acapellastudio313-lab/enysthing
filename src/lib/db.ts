@@ -63,10 +63,13 @@ export const createPost = async (postData: any) => {
     author_id: postData.author_id,
     content: postData.content,
     image_url: postData.image_url || null,
+    video_url: postData.video_url || null,
+    document_url: postData.document_url || null,
     audio_url: postData.audio_url || null,
     created_at: serverTimestamp(),
     likes_count: 0,
     comments_count: 0,
+    is_pinned: 0,
   });
   return docRef.id;
 };
@@ -86,6 +89,14 @@ export const listenToPosts = (callback: (posts: Post[]) => void) => {
         created_at: data.created_at?.toDate()?.toISOString() || new Date().toISOString(),
       } as Post;
     }));
+    
+    // Sort by pinned first
+    posts.sort((a, b) => {
+      if (a.is_pinned === 1 && b.is_pinned !== 1) return -1;
+      if (a.is_pinned !== 1 && b.is_pinned === 1) return 1;
+      return 0;
+    });
+    
     callback(posts);
   });
 };
@@ -129,6 +140,17 @@ export const likePost = async (postId: string, userId: string) => {
       }
     }
   }
+};
+
+export const getPostLikers = async (postId: string): Promise<User[]> => {
+  const likeRef = collection(db, "posts", postId, "likes");
+  const likeSnap = await getDocs(likeRef);
+  
+  if (likeSnap.empty) return [];
+
+  const userIds = likeSnap.docs.map(doc => doc.id);
+  const users = await Promise.all(userIds.map(id => getUser(id)));
+  return users.filter(u => u !== null) as User[];
 };
 
 export const checkIsLiked = async (postId: string, userId: string) => {
@@ -465,12 +487,14 @@ export const listenToMessages = (userId: string, otherUserId: string, callback: 
   });
 };
 
-export const sendMessage = async (userId: string, otherUserId: string, text: string) => {
+export const sendMessage = async (userId: string, otherUserId: string, text: string, attachment?: { url: string, type: 'image' | 'video' | 'document' }) => {
   const conversationId = [userId, otherUserId].sort().join("_");
   const messageData = {
     sender_id: userId,
     receiver_id: otherUserId,
     text,
+    attachment_url: attachment?.url || null,
+    attachment_type: attachment?.type || null,
     created_at: serverTimestamp(),
   };
 
@@ -482,14 +506,14 @@ export const sendMessage = async (userId: string, otherUserId: string, text: str
   if (convDoc.exists()) {
     const data = convDoc.data();
     await updateDoc(convRef, {
-      last_message: text,
+      last_message: text || (attachment ? `[${attachment.type}]` : ''),
       last_message_time: serverTimestamp(),
       [`unread_count.${otherUserId}`]: increment(1),
     });
   } else {
     await setDoc(convRef, {
       participants: [userId, otherUserId],
-      last_message: text,
+      last_message: text || (attachment ? `[${attachment.type}]` : ''),
       last_message_time: serverTimestamp(),
       unread_count: {
         [otherUserId]: 1,

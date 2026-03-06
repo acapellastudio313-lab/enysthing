@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import { User, Message, Conversation } from '../types';
-import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus } from 'lucide-react';
-import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB } from '../utils';
+import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus, Paperclip, X, FileText, Image as ImageIcon, Video } from 'lucide-react';
+import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB, compressImage } from '../utils';
 import { useLocation } from 'react-router-dom';
 import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead } from '../lib/db';
 
@@ -15,7 +15,9 @@ export default function Messages({ user }: { user: User }) {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [attachment, setAttachment] = useState<{ url: string, type: 'image' | 'video' | 'document', name?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -68,15 +70,57 @@ export default function Messages({ user }: { user: User }) {
     scrollToBottom();
   }, [messages]);
 
+  const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limits
+    if (file.type.startsWith('image/') && file.size > 5 * 1024 * 1024) {
+      alert('Maksimal 5MB untuk gambar'); return;
+    }
+    if (file.type.startsWith('video/') && file.size > 10 * 1024 * 1024) {
+      alert('Maksimal 10MB untuk video'); return;
+    }
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && file.size > 5 * 1024 * 1024) {
+       alert('Maksimal 5MB untuk dokumen'); return;
+    }
+
+    let type: 'image' | 'video' | 'document' = 'document';
+    if (file.type.startsWith('image/')) type = 'image';
+    else if (file.type.startsWith('video/')) type = 'video';
+
+    if (type === 'image') {
+       try {
+         const url = await compressImage(file);
+         setAttachment({ url, type, name: file.name });
+       } catch (e) {
+         console.error(e);
+         alert('Gagal memproses gambar');
+       }
+    } else {
+       const reader = new FileReader();
+       reader.onloadend = () => {
+         setAttachment({ url: reader.result as string, type, name: file.name });
+       };
+       reader.readAsDataURL(file);
+    }
+  };
+
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation) return;
+    if ((!newMessage.trim() && !attachment) || !selectedConversation) return;
 
     const content = newMessage.trim();
+    const currentAttachment = attachment;
+    
     setNewMessage('');
+    setAttachment(null);
 
     try {
-      await sendMessage(user.id, selectedConversation.id, content);
+      await sendMessage(user.id, selectedConversation.id, content, currentAttachment ? {
+        url: currentAttachment.url,
+        type: currentAttachment.type
+      } : undefined);
     } catch (err) {
       console.error('Failed to send message', err);
     }
@@ -254,7 +298,23 @@ export default function Messages({ user }: { user: User }) {
                           ? 'bg-emerald-600 text-white rounded-tr-none' 
                           : 'bg-white text-slate-800 rounded-tl-none'
                       }`}>
-                        <p className="leading-relaxed">{msg.text}</p>
+                        {msg.attachment_url && (
+                          <div className="mb-2">
+                            {msg.attachment_type === 'image' && (
+                              <img src={msg.attachment_url} alt="Attachment" className="max-w-full rounded-lg" />
+                            )}
+                            {msg.attachment_type === 'video' && (
+                              <video src={msg.attachment_url} controls className="max-w-full rounded-lg" />
+                            )}
+                            {msg.attachment_type === 'document' && (
+                              <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 p-2 rounded-lg hover:bg-black/20 transition-colors">
+                                <FileText className="w-5 h-5" />
+                                <span className="underline">Lihat Dokumen</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                         <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-emerald-100' : 'text-slate-400'}`}>
                           {formatTimeWIB(msg.created_at)}
                         </p>
@@ -268,7 +328,31 @@ export default function Messages({ user }: { user: User }) {
 
             {/* Message Input */}
             <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+              {attachment && (
+                <div className="mb-2 flex items-center gap-2 bg-slate-100 p-2 rounded-lg w-fit">
+                  {attachment.type === 'image' && <ImageIcon className="w-4 h-4 text-slate-500" />}
+                  {attachment.type === 'video' && <Video className="w-4 h-4 text-slate-500" />}
+                  {attachment.type === 'document' && <FileText className="w-4 h-4 text-slate-500" />}
+                  <span className="text-xs text-slate-600 truncate max-w-[200px]">{attachment.name || 'Lampiran'}</span>
+                  <button onClick={() => setAttachment(null)} className="p-1 hover:bg-slate-200 rounded-full">
+                    <X className="w-3 h-3 text-slate-500" />
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                <input 
+                  type="file" 
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
                 <input
                   type="text"
                   placeholder="Ketik pesan..."
@@ -278,7 +362,7 @@ export default function Messages({ user }: { user: User }) {
                 />
                 <button
                   type="submit"
-                  disabled={!newMessage.trim()}
+                  disabled={!newMessage.trim() && !attachment}
                   className="p-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:hover:bg-emerald-600"
                 >
                   <Send className="w-5 h-5" />
