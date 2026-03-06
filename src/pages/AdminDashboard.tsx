@@ -19,7 +19,8 @@ import {
   resetAllData,
   updateUser,
   updateCandidate,
-  createUser
+  createUser,
+  getCandidateVoters
 } from '../lib/db';
 
 export default function AdminDashboard({ user }: { user: User }) {
@@ -56,8 +57,29 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [updatingGeneral, setUpdatingGeneral] = useState(false);
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1 });
+  const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1, password: '' });
   
+  const [votersModal, setVotersModal] = useState<{ isOpen: boolean, candidateName: string, voters: User[] }>({
+    isOpen: false,
+    candidateName: '',
+    voters: []
+  });
+  const [loadingVoters, setLoadingVoters] = useState(false);
+
+  const handleViewVoters = async (candidateId: string, candidateName: string) => {
+    setLoadingVoters(true);
+    setVotersModal({ isOpen: true, candidateName, voters: [] });
+    try {
+      const voters = await getCandidateVoters(candidateId);
+      setVotersModal({ isOpen: true, candidateName, voters });
+    } catch (err) {
+      console.error('Failed to fetch voters', err);
+      toast.error('Gagal memuat data pemilih');
+    } finally {
+      setLoadingVoters(false);
+    }
+  };
+
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [addUserForm, setAddUserForm] = useState({ name: '', username: '', password: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1 });
 
@@ -269,8 +291,23 @@ export default function AdminDashboard({ user }: { user: User }) {
     setUpdatingStatus(true);
     
     try {
+      // If switching to in_progress, ensure we have a valid future date
+      if (status === 'in_progress') {
+        const now = new Date().getTime();
+        const currentEnd = electionEndDate ? new Date(electionEndDate).getTime() : 0;
+        
+        if (!electionEndDate || currentEnd <= now) {
+          // Set default to 24 hours from now
+          const tomorrow = new Date();
+          tomorrow.setHours(tomorrow.getHours() + 24);
+          const tomorrowStr = tomorrow.toISOString().slice(0, 16); // Format for datetime-local
+          setElectionEndDate(tomorrowStr);
+          await updateSetting('election_end_date', tomorrowStr);
+        }
+      }
+
       await updateSetting('election_status', status);
-      setElectionStatus(status);
+      // Do NOT setElectionStatus(status) here again, let the listener handle it
       setStatusMessage({ type: 'success', text: 'Status pemilihan berhasil diperbarui' });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
@@ -374,7 +411,8 @@ export default function AdminDashboard({ user }: { user: User }) {
       bio: u.bio || '',
       role: u.role,
       is_verified: u.is_verified || 0,
-      is_approved: u.is_approved !== undefined ? u.is_approved : 1
+      is_approved: u.is_approved !== undefined ? u.is_approved : 1,
+      password: ''
     });
   };
 
@@ -383,8 +421,13 @@ export default function AdminDashboard({ user }: { user: User }) {
     if (!editingUser) return;
 
     try {
-      await updateUser(editingUser.id, editForm);
-      setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...editForm } : u));
+      const updateData: any = { ...editForm };
+      if (!updateData.password) {
+        delete updateData.password;
+      }
+
+      await updateUser(editingUser.id, updateData);
+      setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...updateData } : u));
       setEditingUser(null);
       const s = await getStats();
       setStats(s);
@@ -1191,7 +1234,10 @@ export default function AdminDashboard({ user }: { user: User }) {
                   const percentage = maxVotes > 0 ? (item.vote_count / maxVotes) * 100 : 0;
                   
                   return (
-                    <div key={`${item.id}-${index}`} className="bg-white p-3 md:p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <div key={`${item.id}-${index}`} 
+                      className="bg-white p-3 md:p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors"
+                      onClick={() => handleViewVoters(item.id, item.name)}
+                    >
                       <div className="flex items-center gap-3 md:gap-4 mb-2 md:mb-3">
                         <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-xs md:text-sm shrink-0 ${
                           index === 0 ? 'bg-yellow-100 text-yellow-700' :
@@ -1363,6 +1409,16 @@ export default function AdminDashboard({ user }: { user: User }) {
                   value={editForm.username}
                   onChange={e => setEditForm({...editForm, username: e.target.value})}
                   required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Password (Kosongkan jika tidak ingin mengubah)</label>
+                <input
+                  type="password"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={editForm.password}
+                  onChange={e => setEditForm({...editForm, password: e.target.value})}
+                  placeholder="Masukkan password baru"
                 />
               </div>
               <div>
@@ -1682,6 +1738,46 @@ export default function AdminDashboard({ user }: { user: User }) {
               >
                 Reset Data
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Voters List Modal */}
+      {votersModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden shadow-xl flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="font-bold text-slate-900">Daftar Pemilih</h3>
+                <p className="text-xs text-slate-500">Kandidat: {votersModal.candidateName}</p>
+              </div>
+              <button onClick={() => setVotersModal({ ...votersModal, isOpen: false })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-0 overflow-y-auto flex-1">
+              {loadingVoters ? (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-500">
+                  <Loader2 className="w-8 h-8 animate-spin mb-2 text-emerald-600" />
+                  <p>Memuat data...</p>
+                </div>
+              ) : votersModal.voters.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {votersModal.voters.map((voter, idx) => (
+                    <div key={idx} className="p-3 flex items-center gap-3 hover:bg-slate-50">
+                      <img src={voter.avatar} alt={voter.name} className="w-10 h-10 rounded-full object-cover" />
+                      <div>
+                        <div className="font-medium text-slate-900 text-sm">{voter.name}</div>
+                        <div className="text-xs text-slate-500">@{voter.username}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-slate-500">
+                  Belum ada pemilih untuk kandidat ini.
+                </div>
+              )}
             </div>
           </div>
         </div>

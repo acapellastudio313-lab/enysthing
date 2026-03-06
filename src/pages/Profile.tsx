@@ -334,6 +334,12 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
 
         <div className="mt-4 text-sm sm:text-base text-slate-800 leading-relaxed max-w-2xl text-center sm:text-left">
           <p>{profileUser.bio || 'Pegawai Pengadilan Agama Prabumulih. Berkomitmen untuk memberikan pelayanan terbaik bagi masyarakat pencari keadilan.'}</p>
+          {profileUser.location && (
+            <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-2 text-slate-500 text-sm">
+              <MapPin className="w-4 h-4 text-slate-400" />
+              <span>{profileUser.location}</span>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-3 sm:gap-4 text-xs sm:text-sm text-slate-500 font-medium">
@@ -341,12 +347,6 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
             <Briefcase className="w-4 h-4 text-slate-400" />
             <span className="capitalize">{profileUser.role}</span>
           </div>
-          {profileUser.location && (
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-slate-400" />
-              <span>{profileUser.location}</span>
-            </div>
-          )}
         </div>
 
         <div className="mt-8 flex gap-4 sm:gap-6 border-b border-slate-200">
@@ -667,20 +667,6 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
                   onChange={e => setEditForm({...editForm, username: e.target.value})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Lokasi</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={editForm.location}
-                    disabled
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl pl-10 pr-4 py-2 outline-none text-slate-500 cursor-not-allowed"
-                  />
-                </div>
-                <p className="text-xs text-slate-400 mt-1">Lokasi tidak dapat diubah.</p>
               </div>
 
               <div>

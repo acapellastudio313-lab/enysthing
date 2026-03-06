@@ -27,7 +27,7 @@ export default function Login({ onLogin }: LoginProps) {
         setBranding({
           name: settings.app_name || 'Pemilihan Agen Perubahan - PA Prabumulih',
           subtitle: settings.app_subtitle || 'Pengadilan Agama Prabumulih',
-          logo: settings.app_logo_url || 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Logo_Mahkamah_Agung_RI.png/600px-Logo_Mahkamah_Agung_RI.png'
+          logo: settings.app_logo || 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Logo_Mahkamah_Agung_RI.png/600px-Logo_Mahkamah_Agung_RI.png'
         });
       } catch (err) {
         console.error('Failed to fetch settings', err);
@@ -143,7 +143,7 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {branding.logo && (
           <div className="flex justify-center mb-4">
-            <img src={branding.logo} alt="Logo" className="h-20 w-auto object-contain" />
+            <img src={branding.logo} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
           </div>
         )}
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">

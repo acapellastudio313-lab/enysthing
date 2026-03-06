@@ -48,7 +48,13 @@ function StoryViewer({
     try {
       await deleteStory(currentStory.id);
       toast.success('Cerita berhasil dihapus');
-      handleNext();
+      
+      // If this was the last story in the last group, close the viewer
+      if (storyGroups.length === 1 && currentGroup.stories.length === 1) {
+        onClose();
+      } else {
+        handleNext();
+      }
     } catch (e) {
       console.error('Error deleting story:', e);
       toast.error('Terjadi kesalahan saat menghapus cerita');
@@ -187,18 +193,20 @@ function StoryViewer({
               <p className="text-white font-bold text-sm">{currentGroup.user_name}</p>
               <p className="text-white/70 text-xs">{formatDateWIB(currentStory.created_at)}</p>
             </div>
+            
+            {(Number(currentStory.user_id) === Number(currentUser.id) || currentUser.role === 'admin') && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
+                disabled={isDeleting}
+                className="p-2 text-white/70 hover:text-red-500 transition-colors ml-2"
+                title="Hapus Cerita"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            )}
           </div>
           
-          {(Number(currentStory.user_id) === Number(currentUser.id) || currentUser.role === 'admin') && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
-              disabled={isDeleting}
-              className="p-2 text-white/70 hover:text-red-500 transition-colors z-[70]"
-              title="Hapus Cerita"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          )}
+          {/* Close button is outside this header, fixed at top right */}
         </div>
 
         {/* Tap Areas */}
@@ -377,34 +385,43 @@ export default function Stories({ user }: { user: User }) {
   }, []);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Ukuran file maksimal 10MB');
-      return;
-    }
+    try {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Ukuran file maksimal 10MB');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
 
-    const isVideo = file.type.startsWith('video/');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setUploadMedia({ url: event.target.result as string, type: isVideo ? 'video' : 'image' });
-        setShowUpload(true);
-        stopCamera();
-      }
-      // Reset input
+      const isVideo = file.type.startsWith('video/');
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setUploadMedia({ url: event.target.result as string, type: isVideo ? 'video' : 'image' });
+          setShowUpload(true);
+          stopCamera();
+        }
+        // Reset input after successful read
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+      reader.onerror = () => {
+        alert('Gagal membaca file. Silakan coba lagi.');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error handling file:', error);
+      alert('Terjadi kesalahan saat memilih file.');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-    };
-    reader.onerror = () => {
-      alert('Gagal membaca file. Silakan coba lagi.');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const stopCamera = () => {
@@ -626,15 +643,15 @@ export default function Stories({ user }: { user: User }) {
             }}>
               <div className={clsx(
                 "w-16 h-16 rounded-full flex items-center justify-center",
-                !allViewed && "p-0.5 bg-gradient-to-tr from-yellow-400 to-fuchsia-600"
+                !allViewed ? "p-0.5 bg-gradient-to-tr from-yellow-400 to-fuchsia-600" : ""
               )}>
                 <img 
                   src={group.user_avatar} 
                   alt={group.user_name} 
                   className={clsx(
                     "w-full h-full rounded-full object-cover",
-                    allViewed ? "border-2 border-slate-200 p-0.5" : "border-2 border-white"
-                  )} 
+                    !allViewed ? "border-2 border-white" : "border border-slate-200"
+                  )}
                 />
               </div>
               <span className="text-xs font-medium text-slate-600 truncate w-16 text-center">{group.user_name.split(' ')[0]}</span>

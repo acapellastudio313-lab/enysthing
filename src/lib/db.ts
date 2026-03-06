@@ -90,6 +90,14 @@ export const listenToPosts = (callback: (posts: Post[]) => void) => {
   });
 };
 
+export const createNotification = async (userId: string, notification: any) => {
+  await addDoc(collection(db, "users", userId, "notifications"), {
+    ...notification,
+    is_read: 0,
+    created_at: serverTimestamp(),
+  });
+};
+
 export const likePost = async (postId: string, userId: string) => {
   const likeRef = doc(db, "posts", postId, "likes", userId);
   const likeSnap = await getDoc(likeRef);
@@ -101,6 +109,25 @@ export const likePost = async (postId: string, userId: string) => {
   } else {
     await setDoc(likeRef, { created_at: serverTimestamp() });
     await updateDoc(postRef, { likes_count: increment(1) });
+    
+    // Send notification
+    const postSnap = await getDoc(postRef);
+    if (postSnap.exists()) {
+      const postData = postSnap.data();
+      if (postData.author_id !== userId) {
+        const user = await getUser(userId);
+        if (user) {
+          await createNotification(postData.author_id, {
+            type: 'like',
+            from_user_id: userId,
+            from_user_name: user.name,
+            from_user_avatar: user.avatar,
+            post_id: postId,
+            message: 'menyukai postingan Anda',
+          });
+        }
+      }
+    }
   }
 };
 
@@ -117,6 +144,26 @@ export const addComment = async (postId: string, commentData: any) => {
     created_at: serverTimestamp(),
   });
   await updateDoc(doc(db, "posts", postId), { comments_count: increment(1) });
+  
+  // Send notification
+  const postRef = doc(db, "posts", postId);
+  const postSnap = await getDoc(postRef);
+  if (postSnap.exists()) {
+    const postData = postSnap.data();
+    if (postData.author_id !== commentData.author_id) {
+      const user = await getUser(commentData.author_id);
+      if (user) {
+        await createNotification(postData.author_id, {
+          type: 'comment',
+          from_user_id: commentData.author_id,
+          from_user_name: user.name,
+          from_user_avatar: user.avatar,
+          post_id: postId,
+          message: 'mengomentari postingan Anda',
+        });
+      }
+    }
+  }
 };
 
 export const listenToComments = (postId: string, callback: (comments: Comment[]) => void) => {
@@ -282,6 +329,17 @@ export const castVote = async (userId: string, candidateId: string) => {
 };
 
 // Leaderboard
+export const getCandidateVoters = async (candidateId: string): Promise<User[]> => {
+  const q = query(collection(db, "votes"), where("candidate_id", "==", candidateId));
+  const querySnapshot = await getDocs(q);
+  const userIds = querySnapshot.docs.map(doc => doc.data().user_id);
+  
+  if (userIds.length === 0) return [];
+
+  const users = await Promise.all(userIds.map(id => getUser(id)));
+  return users.filter(u => u !== null) as User[];
+};
+
 export const getLeaderboard = async (): Promise<LeaderboardEntry[]> => {
   const candidates = await getCandidates();
   return candidates
