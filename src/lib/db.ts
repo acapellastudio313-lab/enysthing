@@ -60,7 +60,10 @@ export const updateSetting = async (key: string, value: string) => {
 // Posts
 export const createPost = async (postData: any) => {
   const docRef = await addDoc(collection(db, "posts"), {
-    ...postData,
+    author_id: postData.author_id,
+    content: postData.content,
+    image_url: postData.image_url || null,
+    audio_url: postData.audio_url || null,
     created_at: serverTimestamp(),
     likes_count: 0,
     comments_count: 0,

@@ -254,7 +254,7 @@ export default function Messages({ user }: { user: User }) {
                           ? 'bg-emerald-600 text-white rounded-tr-none' 
                           : 'bg-white text-slate-800 rounded-tl-none'
                       }`}>
-                        <p className="leading-relaxed">{msg.content}</p>
+                        <p className="leading-relaxed">{msg.text}</p>
                         <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-emerald-100' : 'text-slate-400'}`}>
                           {formatTimeWIB(msg.created_at)}
                         </p>

@@ -193,7 +193,7 @@ function StoryViewer({
             <button 
               onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
               disabled={isDeleting}
-              className="p-2 text-white/70 hover:text-red-500 transition-colors"
+              className="p-2 text-white/70 hover:text-red-500 transition-colors z-[70]"
               title="Hapus Cerita"
             >
               <Trash2 className="w-5 h-5" />
@@ -558,6 +558,8 @@ export default function Stories({ user }: { user: User }) {
       setUploadMedia(null);
       setTextOverlay(null);
       setTaggedUsers([]);
+      setTempText('');
+      setIsEditingText(false);
     } catch (e) {
       console.error(e);
       alert('Gagal mengunggah cerita. Silakan coba lagi.');
@@ -702,7 +704,7 @@ export default function Stories({ user }: { user: User }) {
             className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4"
           >
             <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-[60]">
-              <button onClick={() => setShowUpload(false)} className="text-white p-2 bg-black/50 rounded-full hover:bg-black/80 transition-colors flex items-center gap-2 px-4">
+              <button onClick={() => { setShowUpload(false); setUploadMedia(null); }} className="text-white p-2 bg-black/50 rounded-full hover:bg-black/80 transition-colors flex items-center gap-2 px-4">
                 <X className="w-5 h-5" />
                 <span className="text-sm font-medium">Batal</span>
               </button>
@@ -781,7 +783,7 @@ export default function Stories({ user }: { user: User }) {
                   </>
                 )}
               </div>
-              <div className="p-4 pb-8 md:pb-4 flex justify-end shrink-0 bg-slate-900 border-t border-slate-800">
+              <div className="p-4 pb-8 md:pb-4 flex justify-end shrink-0 bg-slate-900 border-t border-slate-800 z-[60]">
                 <button 
                   onClick={handleUpload} 
                   disabled={isUploading}

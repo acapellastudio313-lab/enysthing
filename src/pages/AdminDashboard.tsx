@@ -1508,13 +1508,13 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <select
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
                     value={selectedUserId}
-                    onChange={e => setSelectedUserId(Number(e.target.value))}
+                    onChange={e => setSelectedUserId(e.target.value)}
                     required
                   >
                     <option value="">-- Pilih Pengguna --</option>
-                    {users.filter(u => u.role !== 'candidate' && u.role !== 'admin').map(u => (
+                    {users.map(u => (
                       <option key={u.id} value={u.id}>
-                        {u.name} (@{u.username})
+                        {u.name} (@{u.username}) - {u.role}
                       </option>
                     ))}
                   </select>
