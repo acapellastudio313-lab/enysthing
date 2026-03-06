@@ -4,6 +4,7 @@ import { User, Post, Candidate } from '../types';
 import { Settings, Edit3, MapPin, Briefcase, Info, X, Camera, MessageSquare, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import PostItem from '../components/PostItem';
+import { getUser, listenToPosts, getCandidates, updateUser, updateCandidate, likePost, pinPost } from '../lib/db';
 
 export default function Profile({ user: currentUser, onUpdateUser }: { user: User, onUpdateUser?: (user: User) => void }) {
   const { userId } = useParams();
@@ -28,8 +29,8 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
   const [campaignForm, setCampaignForm] = useState({ vision: '', mission: '', innovation_program: '', image_url: '' });
   const [campaignLoading, setCampaignLoading] = useState(false);
 
-  const isOwnProfile = !userId || Number(userId) === currentUser.id;
-  const targetUserId = isOwnProfile ? currentUser.id : Number(userId);
+  const isOwnProfile = !userId || userId === currentUser.id;
+  const targetUserId = isOwnProfile ? currentUser.id : userId as string;
 
   let canEditProfile = false;
   if (profileUser) {
@@ -45,85 +46,77 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
   useEffect(() => {
     window.scrollTo(0, 0);
     setLoading(true);
-    setProfileUser(null); // Force reset to trigger second effect reliably
     
-    if (isOwnProfile) {
-      // Use a small delay or next tick to ensure state transition is clean
-      const timer = setTimeout(() => {
+    const fetchProfile = async () => {
+      if (isOwnProfile) {
         setProfileUser({ ...currentUser });
-      }, 0);
-      return () => clearTimeout(timer);
-    } else {
-      fetch('/api/users')
-        .then(res => res.json())
-        .then((users: User[]) => {
-          const found = users.find(u => u.id === targetUserId);
-          if (found) {
-            setProfileUser(found);
+      } else {
+        try {
+          const user = await getUser(targetUserId);
+          if (user) {
+            setProfileUser(user);
           } else {
             setLoading(false);
           }
-        })
-        .catch(() => setLoading(false));
-    }
-  }, [targetUserId, isOwnProfile, currentUser, location.pathname]);
+        } catch (err) {
+          console.error(err);
+          setLoading(false);
+        }
+      }
+    };
 
-  const fetchPosts = () => {
-    fetch(`/api/posts?userId=${currentUser.id}`)
-      .then(res => res.json())
-      .then(data => {
-        const userPosts = data.filter((post: Post) => post.author_id === targetUserId);
-        setPosts(userPosts);
-        setLoading(false);
-      });
-  };
+    fetchProfile();
+  }, [targetUserId, isOwnProfile, currentUser, location.pathname]);
 
   useEffect(() => {
     if (!profileUser) return;
     
-    fetchPosts();
+    const unsubscribePosts = listenToPosts((allPosts) => {
+      const userPosts = allPosts.filter(p => p.author_id === targetUserId);
+      setPosts(userPosts);
+      setLoading(false);
+    });
+
     if (profileUser.role === 'candidate') {
-      fetch('/api/candidates')
-        .then(res => res.json())
-        .then((data: Candidate[]) => {
-          const found = data.find(c => c.user_id === profileUser.id);
-          if (found) {
-            setCandidateData(found);
-            setCampaignForm({ 
-              vision: found.vision || '', 
-              mission: found.mission || '',
-              innovation_program: found.innovation_program || '',
-              image_url: found.image_url || ''
-            });
-          }
-        });
+      getCandidates().then(candidates => {
+        const found = candidates.find(c => c.user_id === profileUser.id);
+        if (found) {
+          setCandidateData(found);
+          setCampaignForm({ 
+            vision: found.vision || '', 
+            mission: found.mission || '',
+            innovation_program: found.innovation_program || '',
+            image_url: found.image_url || ''
+          });
+        }
+      });
     }
-  }, [profileUser, targetUserId]);
+
+    return () => unsubscribePosts();
+  }, [profileUser, targetUserId, currentUser.id]);
 
   const handlePostUpdated = (updatedPost: Post) => {
     setPosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p));
   };
 
-  const handlePostDeleted = (postId: number) => {
+  const handlePostDeleted = (postId: string) => {
     setPosts(posts.filter(p => p.id !== postId));
   };
 
-  const handleLike = async (postId: number) => {
-    await fetch(`/api/posts/${postId}/like`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: currentUser.id }),
-    });
-    fetchPosts();
+  const handleLike = async (postId: string) => {
+    try {
+      await likePost(postId, currentUser.id);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handlePin = async (postId: number, isPinned: boolean) => {
-    await fetch(`/api/admin/posts/${postId}/pin`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_pinned: !isPinned }),
-    });
-    fetchPosts();
+  const handlePin = async (postId: string, isPinned: boolean) => {
+    try {
+      await pinPost(postId, !isPinned);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleEditSubmit = async (e: FormEvent) => {
@@ -138,24 +131,12 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
         avatar_position: `${avatarPos.x}% ${avatarPos.y}%`
       };
 
-      const res = await fetch(`/api/users/${profileUser?.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(finalForm),
-      });
+      await updateUser(profileUser!.id, finalForm);
 
-      let data;
-      try {
-        data = await res.json();
-      } catch (e) {
-        throw new Error('Gagal memperbarui profil: Respons server tidak valid');
-      }
-
-      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui profil');
-
-      setProfileUser(data);
+      const updatedUser = { ...profileUser!, ...finalForm };
+      setProfileUser(updatedUser);
       if (onUpdateUser && isOwnProfile) {
-        onUpdateUser(data);
+        onUpdateUser(updatedUser);
       }
       toast.success('Profil berhasil diperbarui!');
       setShowEditModal(false);
@@ -261,19 +242,17 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
 
   const handleCampaignSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!candidateData) return;
+    
     setCampaignLoading(true);
     try {
-      const res = await fetch(`/api/candidates/${profileUser?.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(campaignForm),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui kampanye');
-      setCandidateData(data);
+      await updateCandidate(candidateData.id, campaignForm);
+      setCandidateData({ ...candidateData, ...campaignForm });
       setIsEditingCampaign(false);
+      toast.success('Informasi kampanye berhasil diperbarui');
     } catch (err: any) {
-      alert(err.message);
+      console.error(err);
+      alert(err.message || 'Gagal memperbarui kampanye');
     } finally {
       setCampaignLoading(false);
     }
@@ -400,7 +379,6 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
                     user={currentUser} 
                     onLike={handleLike} 
                     onPin={handlePin}
-                    onCommentAdded={fetchPosts}
                     onPostUpdated={handlePostUpdated}
                     onPostDeleted={handlePostDeleted}
                   />

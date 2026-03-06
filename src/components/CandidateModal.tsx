@@ -4,6 +4,7 @@ import { X, Loader2, User as UserIcon, FileText, Target, Lightbulb, Image as Ima
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx } from 'clsx';
+import { getAllUsers, listenToSettings, addCandidate, updateCandidate, updateUser } from '../lib/db';
 
 interface CandidateModalProps {
   candidate: Candidate | null;
@@ -27,19 +28,18 @@ export default function CandidateModal({ candidate, onClose, onSave }: Candidate
     const fetchData = async () => {
       setFetchingUsers(true);
       try {
-        const [usersRes, settingsRes] = await Promise.all([
-          fetch('/api/admin/users'),
-          fetch('/api/settings/general')
-        ]);
-        const usersData = await usersRes.json();
-        const settingsData = await settingsRes.json();
+        const usersData = await getAllUsers();
         setUsers(usersData);
-        if (settingsData.candidateLabel) {
-          setLabels({
-            label: settingsData.candidateLabel,
-            descLabel: settingsData.candidateDescLabel || 'Visi & Misi'
-          });
-        }
+        
+        const unsubscribe = listenToSettings((settings) => {
+          unsubscribe();
+          if (settings.candidate_label) {
+            setLabels({
+              label: settings.candidate_label,
+              descLabel: settings.candidate_desc_label || 'Visi & Misi'
+            });
+          }
+        });
       } catch (err) {
         console.error('Error fetching data:', err);
       } finally {
@@ -53,31 +53,22 @@ export default function CandidateModal({ candidate, onClose, onSave }: Candidate
     e.preventDefault();
     setLoading(true);
     try {
-      const url = candidate ? `/api/candidates/${candidate.id}` : '/api/candidates';
-      const method = candidate ? 'PUT' : 'POST';
-      
-      const payload = candidate ? {
-        vision,
-        mission,
-        innovation_program: innovationProgram,
-        name,
-        avatar: photo
-      } : {
-        user_id: Number(userId),
-        vision,
-        mission,
-        innovation_program: innovationProgram,
-        name,
-        avatar: photo
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error('Failed to save candidate');
+      if (candidate) {
+        await updateUser(candidate.user_id, { name, avatar: photo });
+        await updateCandidate(candidate.id, {
+          vision,
+          mission,
+          innovation_program: innovationProgram,
+          image_url: photo
+        });
+      } else {
+        await addCandidate(String(userId), {
+          vision,
+          mission,
+          innovation_program: innovationProgram,
+          image_url: photo
+        });
+      }
       
       toast.success(`Kandidat berhasil ${candidate ? 'diperbarui' : 'ditambahkan'}`);
       await onSave();

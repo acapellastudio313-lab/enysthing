@@ -1,7 +1,7 @@
 export type ElectionStatus = 'not_started' | 'in_progress' | 'closed';
 
 export interface User {
-  id: number;
+  id: string;
   username: string;
   name: string;
   avatar: string;
@@ -16,11 +16,12 @@ export interface User {
   is_verified?: number;
   is_approved?: number;
   role: 'admin' | 'candidate' | 'voter';
+  password?: string;
 }
 
 export interface Candidate {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   vision: string;
   mission: string;
   innovation_program?: string;
@@ -32,8 +33,8 @@ export interface Candidate {
 }
 
 export interface Story {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   media_url: string;
   media_type: 'image' | 'video';
   created_at: string;
@@ -49,14 +50,14 @@ export interface Story {
     scale: number;
   }[];
   tags?: {
-    id: number;
+    id: string;
     username: string;
     name: string;
     x?: number;
     y?: number;
   }[];
   views?: {
-    id: number;
+    id: string;
     username: string;
     name: string;
     avatar: string;
@@ -65,8 +66,8 @@ export interface Story {
 }
 
 export interface Post {
-  id: number;
-  author_id: number;
+  id: string;
+  author_id: string;
   content: string;
   image_url: string | null;
   audio_url?: string | null;
@@ -83,9 +84,9 @@ export interface Post {
 }
 
 export interface Comment {
-  id: number;
-  post_id: number;
-  author_id: number;
+  id: string;
+  post_id: string;
+  author_id: string;
   content: string;
   created_at: string;
   name: string;
@@ -94,7 +95,7 @@ export interface Comment {
 }
 
 export interface LeaderboardEntry {
-  id: number;
+  id: string;
   name: string;
   avatar: string;
   username: string;
@@ -102,11 +103,12 @@ export interface LeaderboardEntry {
 }
 
 export interface Notification {
-  id: number;
-  user_id: number;
-  actor_id: number;
-  type: 'like' | 'comment' | 'register';
-  post_id?: number;
+  id: string;
+  user_id: string;
+  actor_id: string;
+  type: 'like' | 'comment' | 'register' | 'story_tag';
+  post_id?: string;
+  story_id?: string;
   is_read: number;
   created_at: string;
   actor_name: string;
@@ -114,16 +116,16 @@ export interface Notification {
 }
 
 export interface Message {
-  id: number;
-  sender_id: number;
-  receiver_id: number;
+  id: string;
+  sender_id: string;
+  receiver_id: string;
   content: string;
   created_at: string;
   is_read: number;
 }
 
 export interface Conversation {
-  id: number;
+  id: string;
   name: string;
   username: string;
   avatar: string;

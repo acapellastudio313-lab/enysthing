@@ -1,28 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, TrendingUp, User as UserIcon, MessageSquare, X } from 'lucide-react';
-import { LeaderboardEntry } from '../types';
+import { LeaderboardEntry, User, Post } from '../types';
 import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
+import { getLeaderboard, listenToSettings, search } from '../lib/db';
 
 import Stories from './Stories';
 
 interface SearchResult {
-  posts: {
-    id: number;
-    content: string;
-    created_at: string;
-    name: string;
-    avatar: string;
-    username: string;
-    author_id: number;
-  }[];
-  users: {
-    id: number;
-    name: string;
-    username: string;
-    avatar: string;
-    role: string;
-  }[];
+  posts: Post[];
+  users: User[];
 }
 
 export default function RightSidebar({ isMobile = false, user }: { isMobile?: boolean, user?: any }) {
@@ -37,6 +24,7 @@ export default function RightSidebar({ isMobile = false, user }: { isMobile?: bo
     setQuery('');
     setResults(null);
   }, [location.pathname]);
+
   const [exploreSettings, setExploreSettings] = useState({
     title: 'Informasi Pemilihan',
     schedule: '1 - 15 November 2024',
@@ -46,17 +34,20 @@ export default function RightSidebar({ isMobile = false, user }: { isMobile?: bo
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch('/api/leaderboard')
-      .then(res => res.json())
-      .then(data => {
-        setTrending(data.slice(0, 3));
-      });
+    getLeaderboard().then(data => {
+      setTrending(data.slice(0, 3));
+    });
 
-    fetch('/api/settings/explore')
-      .then(res => res.json())
-      .then(data => {
-        setExploreSettings(data);
+    const unsubscribeSettings = listenToSettings((settings) => {
+      setExploreSettings({
+        title: settings.explore_title || 'Informasi Pemilihan',
+        schedule: settings.explore_schedule || '1 - 15 November 2024',
+        requirement: settings.explore_requirement || 'Seluruh Pegawai PA Prabumulih',
+        help: settings.explore_help || 'Hubungi panitia jika mengalami kendala saat melakukan voting.'
       });
+    });
+
+    return () => unsubscribeSettings();
   }, []);
 
   useEffect(() => {
@@ -75,14 +66,16 @@ export default function RightSidebar({ isMobile = false, user }: { isMobile?: bo
       return;
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       setIsSearching(true);
-      fetch(`/api/search?q=${encodeURIComponent(query)}`)
-        .then(res => res.json())
-        .then(data => {
-          setResults(data);
-          setIsSearching(false);
-        });
+      try {
+        const data = await search(query);
+        setResults(data);
+      } catch (err) {
+        console.error('Search error:', err);
+      } finally {
+        setIsSearching(false);
+      }
     }, 300);
 
     return () => clearTimeout(timer);
@@ -109,15 +102,17 @@ export default function RightSidebar({ isMobile = false, user }: { isMobile?: bo
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => {
+            onFocus={async () => {
               if (query.trim() && !results) {
                 setIsSearching(true);
-                fetch(`/api/search?q=${encodeURIComponent(query)}`)
-                  .then(res => res.json())
-                  .then(data => {
-                    setResults(data);
-                    setIsSearching(false);
-                  });
+                try {
+                  const data = await search(query);
+                  setResults(data);
+                } catch (err) {
+                  console.error('Search error:', err);
+                } finally {
+                  setIsSearching(false);
+                }
               }
             }}
             placeholder="Cari kandidat, post, atau akun..."

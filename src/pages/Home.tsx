@@ -3,6 +3,8 @@ import { User, Post } from '../types';
 import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock } from 'lucide-react';
 import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
+import { formatDateWIB } from '../utils';
+import { createPost, listenToPosts, listenToSettings, likePost, pinPost } from '../lib/db';
 
 export default function Home({ user }: { user: User }) {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -25,61 +27,26 @@ export default function Home({ user }: { user: User }) {
   const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, seconds: number } | null>(null);
   const [electionStatus, setElectionStatus] = useState<string>('not_started');
 
-  const fetchPosts = () => {
-    fetch(`/api/posts?userId=${user.id}`)
-      .then(res => res.json())
-      .then(data => {
-        setPosts(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        if (err.message !== 'Failed to fetch') {
-          console.error(err);
-        }
-        setLoading(false);
-      });
-  };
-
   useEffect(() => {
-    fetchPosts();
-    
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-    const socket = new WebSocket(wsUrl);
+    const unsubscribePosts = listenToPosts((fetchedPosts) => {
+      setPosts(fetchedPosts);
+      setLoading(false);
+    });
 
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'post:created') {
-        setPosts(prev => [data.post, ...prev]);
-      } else if (data.type === 'post:updated') {
-        setPosts(prev => prev.map(p => p.id === data.post.id ? data.post : p));
-      } else if (data.type === 'post:deleted') {
-        setPosts(prev => prev.filter(p => p.id !== data.postId));
-      } else if (data.type === 'election:status_changed') {
-        setElectionStatus(data.status);
-      } else if (data.type === 'settings:updated' && data.section === 'end_date') {
-        if (data.endDate) {
-          setElectionEndDate(new Date(data.endDate));
-        } else {
-          setElectionEndDate(null);
-        }
+    const unsubscribeSettings = listenToSettings((settings) => {
+      if (settings.election_status) {
+        setElectionStatus(settings.election_status);
       }
+      if (settings.election_end_date) {
+        setElectionEndDate(new Date(settings.election_end_date));
+      }
+    });
+
+    return () => {
+      unsubscribePosts();
+      unsubscribeSettings();
     };
-
-    fetch('/api/settings/status')
-      .then(res => res.json())
-      .then(data => setElectionStatus(data.status));
-
-    fetch('/api/settings/end-date')
-      .then(res => res.json())
-      .then(data => {
-        if (data.endDate) {
-          setElectionEndDate(new Date(data.endDate));
-        }
-      });
-
-    return () => socket.close();
-  }, [user.id]);
+  }, []);
 
   useEffect(() => {
     if (!electionEndDate || electionStatus !== 'in_progress') {
@@ -221,23 +188,23 @@ export default function Home({ user }: { user: User }) {
 
     const finalImageUrl = imageUrl || (showImageInput && !imageUrl ? `https://picsum.photos/seed/${Math.random()}/800/600` : null);
 
-    await fetch('/api/posts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+    try {
+      await createPost({ 
         author_id: user.id, 
         content: newPost, 
         image_url: finalImageUrl,
         audio_url: finalAudioUrl
-      }),
-    });
+      });
 
-    setNewPost('');
-    setImageUrl('');
-    setShowImageInput(false);
-    setAudioBlob(null);
-    setAudioUrl(null);
-    fetchPosts();
+      setNewPost('');
+      setImageUrl('');
+      setShowImageInput(false);
+      setAudioBlob(null);
+      setAudioUrl(null);
+    } catch (error) {
+      console.error('Error creating post:', error);
+      alert('Gagal membuat postingan');
+    }
   };
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -256,30 +223,20 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const handlePin = async (postId: number, isPinned: boolean) => {
-    await fetch(`/api/admin/posts/${postId}/pin`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_pinned: !isPinned }),
-    });
-    fetchPosts();
+  const handlePin = async (postId: string, isPinned: boolean) => {
+    await pinPost(postId, !isPinned);
   };
 
   const handlePostUpdated = (updatedPost: Post) => {
     setPosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p));
   };
 
-  const handlePostDeleted = (postId: number) => {
+  const handlePostDeleted = (postId: string) => {
     setPosts(posts.filter(p => p.id !== postId));
   };
 
-  const handleLike = async (postId: number) => {
-    await fetch(`/api/posts/${postId}/like`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id }),
-    });
-    fetchPosts();
+  const handleLike = async (postId: string) => {
+    await likePost(postId, user.id);
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Memuat linimasa...</div>;
@@ -295,7 +252,7 @@ export default function Home({ user }: { user: User }) {
           </div>
           {electionEndDate && (
             <span className="text-xs bg-white/20 px-3 py-1.5 rounded-full font-medium">
-              Batas Waktu: {electionEndDate.toLocaleDateString('id-ID')} {electionEndDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              Batas Waktu: {formatDateWIB(electionEndDate)}
             </span>
           )}
         </div>
@@ -470,7 +427,6 @@ export default function Home({ user }: { user: User }) {
             user={user} 
             onLike={handleLike} 
             onPin={handlePin}
-            onCommentAdded={fetchPosts}
             onPostUpdated={handlePostUpdated}
             onPostDeleted={handlePostDeleted}
           />

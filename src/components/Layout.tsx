@@ -3,9 +3,11 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Users, Trophy, User as UserIcon, LogOut, Search, MessageSquare, Shield } from 'lucide-react';
 import { User } from '../types';
 import { clsx } from 'clsx';
+import NotificationBanner from './NotificationBanner';
 import RightSidebar from './RightSidebar';
 import NotificationBell from './NotificationBell';
 import { useState, useEffect } from 'react';
+import { listenToSettings, listenToConversations } from '../lib/db';
 
 interface LayoutProps {
   children: ReactNode;
@@ -31,38 +33,41 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
 
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [branding, setBranding] = useState({ name: 'Agen Perubahan', subtitle: 'Aplikasi Pemilihan', icon: 'PA', logo: '' });
+  const [isNavHidden, setIsNavHidden] = useState(false);
 
   useEffect(() => {
-    fetch('/api/settings/general')
-      .then(res => res.json())
-      .then(data => {
-        setBranding({ 
-          name: data.appName || 'Agen Perubahan', 
-          subtitle: data.appSubtitle || 'Aplikasi Pemilihan',
-          icon: data.appIcon || 'PA',
-          logo: data.appLogoUrl || ''
-        });
-      })
-      .catch(err => console.error('Failed to fetch branding', err));
+    setIsNavHidden(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleToggleNav = (e: any) => {
+      setIsNavHidden(e.detail?.hidden || false);
+    };
+
+    window.addEventListener('toggle-nav', handleToggleNav);
+    return () => window.removeEventListener('toggle-nav', handleToggleNav);
   }, []);
 
   useEffect(() => {
-    const fetchUnread = async () => {
-      try {
-        const res = await fetch(`/api/messages/conversations/${user.id}`);
-        const data = await res.json();
-        const count = data.reduce((acc: number, conv: any) => acc + conv.unread_count, 0);
-        setUnreadMessages(count);
-      } catch (err: any) {
-        if (err.message !== 'Failed to fetch') {
-          console.error('Failed to fetch unread messages', err);
-        }
-      }
-    };
+    const unsubscribeSettings = listenToSettings((settings) => {
+      setBranding({
+        name: settings.app_name || 'Agen Perubahan',
+        subtitle: settings.app_subtitle || 'Aplikasi Pemilihan',
+        icon: settings.app_icon || 'PA',
+        logo: settings.app_logo || ''
+      });
+    });
 
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 15000);
-    return () => clearInterval(interval);
+    return () => unsubscribeSettings();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeConversations = listenToConversations(user.id, (conversations) => {
+      const count = conversations.reduce((acc, conv) => acc + conv.unread_count, 0);
+      setUnreadMessages(count);
+    });
+
+    return () => unsubscribeConversations();
   }, [user.id]);
 
   const getPageTitle = () => {
@@ -81,58 +86,61 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center">
       {/* Sidebar Navigation */}
-      <div className="hidden md:flex flex-col w-64 fixed left-0 top-0 h-screen border-r border-slate-200 bg-white px-6 py-8">
-        <div className="flex items-center gap-3 mb-10">
-          {branding.logo ? (
-            <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-slate-100 shrink-0">
-              <img src={branding.logo} alt="Logo" className="w-full h-full object-contain" />
+      {!isNavHidden && (
+        <div className="hidden md:flex flex-col w-64 fixed left-0 top-0 h-screen border-r border-slate-200 bg-white px-6 py-8">
+          <div className="flex items-center gap-3 mb-10">
+            {branding.logo ? (
+              <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-slate-100 shrink-0">
+                <img src={branding.logo} alt="Logo" className="w-full h-full object-contain" />
+              </div>
+            ) : (
+              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0">
+                {branding.icon}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="font-bold text-slate-900 leading-tight truncate">{branding.name}</h1>
+              <p className="text-[10px] text-slate-500 truncate">{branding.subtitle}</p>
             </div>
-          ) : (
-            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0">
-              {branding.icon}
-            </div>
-          )}
-          <div className="min-w-0">
-            <h1 className="font-bold text-slate-900 leading-tight truncate">{branding.name}</h1>
-            <p className="text-[10px] text-slate-500 truncate">{branding.subtitle}</p>
           </div>
+
+          <nav className="flex-1 space-y-2">
+            {navItems.filter(item => !item.mobileOnly).map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  clsx(
+                    'flex items-center gap-4 px-4 py-3 rounded-xl transition-colors font-medium relative',
+                    isActive
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  )
+                }
+              >
+                <item.icon className="w-6 h-6" />
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-4 px-4 py-3 rounded-xl text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors font-medium mt-auto"
+          >
+            <LogOut className="w-6 h-6" />
+            Keluar
+          </button>
         </div>
-
-        <nav className="flex-1 space-y-2">
-          {navItems.filter(item => !item.mobileOnly).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                clsx(
-                  'flex items-center gap-4 px-4 py-3 rounded-xl transition-colors font-medium relative',
-                  isActive
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                )
-              }
-            >
-              <item.icon className="w-6 h-6" />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <button
-          onClick={onLogout}
-          className="flex items-center gap-4 px-4 py-3 rounded-xl text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors font-medium mt-auto"
-        >
-          <LogOut className="w-6 h-6" />
-          Keluar
-        </button>
-      </div>
+      )}
 
       {/* Main Content Area */}
       <div className={clsx(
         "w-full min-h-screen border-r border-l md:border-l-0 border-slate-200 bg-white pb-20 md:pb-0",
-        location.pathname.startsWith('/admin') ? "max-w-full md:ml-64" : "max-w-2xl md:ml-64 lg:mr-80"
+        isNavHidden ? "max-w-full" : (location.pathname.startsWith('/admin') ? "max-w-full md:ml-64" : "max-w-2xl md:ml-64 lg:mr-80")
       )}>
         {/* Header */}
+        <NotificationBanner />
         <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 md:hidden">
             {branding.logo ? (
@@ -185,25 +193,27 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
       <RightSidebar user={user} />
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-2 z-50 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              clsx(
-                'flex flex-col items-center gap-1 p-2 rounded-xl transition-colors relative',
-                isActive ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-900'
-              )
-            }
-          >
-            <div className="relative">
-              <item.icon className="w-6 h-6" />
-            </div>
-            <span className="text-[10px] font-medium">{item.label}</span>
-          </NavLink>
-        ))}
-      </div>
+      {!isNavHidden && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-2 z-50 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                clsx(
+                  'flex flex-col items-center gap-1 p-2 rounded-xl transition-colors relative',
+                  isActive ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-900'
+                )
+              }
+            >
+              <div className="relative">
+                <item.icon className="w-6 h-6" />
+              </div>
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </NavLink>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { User } from '../types';
 import { X, Loader2, User as UserIcon, Mail, Shield, Lock, Image as ImageIcon, AtSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx } from 'clsx';
+import { updateUser, createUser } from '../lib/db';
 
 interface UserModalProps {
   user: User | null;
@@ -26,9 +27,9 @@ export default function UserModal({ user, onClose, onSave }: UserModalProps) {
     if (user) {
       setName(user.name);
       setUsername(user.username);
-      setEmail(user.email);
+      setEmail(user.email || '');
       setRole(user.role);
-      setStatus(user.status);
+      setStatus(user.status || 'pending');
       setPassword('');
     }
   }, [user]);
@@ -49,18 +50,10 @@ export default function UserModal({ user, onClose, onSave }: UserModalProps) {
     };
 
     try {
-      const url = user ? `/api/admin/users/${user.id}` : '/api/register';
-      const method = user ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || `Failed to ${user ? 'update' : 'create'} user`);
+      if (user) {
+        await updateUser(user.id, userData);
+      } else {
+        await createUser(userData);
       }
 
       toast.success(`Pengguna berhasil ${user ? 'diperbarui' : 'ditambahkan'}`);

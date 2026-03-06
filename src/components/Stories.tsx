@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef, ChangeEvent } from 'react';
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { User, Story } from '../types';
-import { Plus, X, Image as ImageIcon, Video as VideoIcon, Camera, Type, AtSign, Eye } from 'lucide-react';
+import { Plus, X, Image as ImageIcon, Video as VideoIcon, Camera, Type, AtSign, Eye, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatDateWIB } from '../utils';
+import { clsx } from 'clsx';
+import { toast } from 'sonner';
+import { createStory, listenToStories, deleteStory, search, viewStory } from '../lib/db';
 
 interface StoryGroup {
-  user_id: number;
+  user_id: string;
   user_name: string;
   user_avatar: string;
   stories: Story[];
@@ -31,6 +36,26 @@ function StoryViewer({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const [showViewers, setShowViewers] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteStory = async () => {
+    if (!currentUser || !currentUser.id) {
+      toast.error('User tidak ditemukan');
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      await deleteStory(currentStory.id);
+      toast.success('Cerita berhasil dihapus');
+      handleNext();
+    } catch (e) {
+      console.error('Error deleting story:', e);
+      toast.error('Terjadi kesalahan saat menghapus cerita');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleNext = () => {
     if (storyIndex < currentGroup.stories.length - 1) {
@@ -57,45 +82,41 @@ function StoryViewer({
   };
 
   useEffect(() => {
-    setProgress(0);
     let animationFrame: number;
-    let startTime: number;
-    const duration = currentStory.media_type === 'image' ? 5000 : 0;
+    let lastTime = performance.now();
+    let accumulatedTime = 0;
+    const IMAGE_DURATION = 5000;
 
-    const animate = (timestamp: number) => {
-      if (isPaused) {
-        startTime += timestamp - lastTimestamp;
-      } else {
-        if (!startTime) startTime = timestamp;
-        const elapsed = timestamp - startTime;
-        if (duration > 0) {
-          const newProgress = Math.min((elapsed / duration) * 100, 100);
-          setProgress(newProgress);
-          if (newProgress >= 100) {
+    const animate = (now: number) => {
+      const deltaTime = now - lastTime;
+      lastTime = now;
+
+      if (!isPaused) {
+        if (currentStory.media_type === 'video' && videoRef.current) {
+          const { currentTime, duration } = videoRef.current;
+          if (duration) {
+            setProgress((currentTime / duration) * 100);
+          }
+        } else if (currentStory.media_type === 'image') {
+          accumulatedTime += deltaTime;
+          const p = Math.min((accumulatedTime / IMAGE_DURATION) * 100, 100);
+          setProgress(p);
+          if (p >= 100) {
             handleNext();
             return;
           }
         }
       }
-      lastTimestamp = timestamp;
+
       animationFrame = requestAnimationFrame(animate);
     };
 
-    let lastTimestamp = performance.now();
-    if (currentStory.media_type === 'image') {
-      animationFrame = requestAnimationFrame(animate);
-    }
-
+    animationFrame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrame);
   }, [currentStory, isPaused]);
 
   const handleVideoTimeUpdate = () => {
-    if (videoRef.current && !isPaused) {
-      const { currentTime, duration } = videoRef.current;
-      if (duration) {
-        setProgress((currentTime / duration) * 100);
-      }
-    }
+    // We now use requestAnimationFrame for smoother updates
   };
 
   useEffect(() => {
@@ -109,15 +130,25 @@ function StoryViewer({
   }, [isPaused, currentStory]);
 
   useEffect(() => {
-    // Record view if not the author
-    if (currentStory.user_id !== currentUser.id) {
-      fetch(`/api/stories/${currentStory.id}/view`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: currentUser.id })
-      }).catch(console.error);
-    }
+    // Record view
+    viewStory(currentStory.id, currentUser.id).catch(console.error);
   }, [currentStory.id, currentUser.id]);
+
+  useEffect(() => {
+    // Dispatch event to toggle bottom navigation
+    const event = new CustomEvent('toggle-nav', { 
+      detail: { hidden: true } 
+    });
+    window.dispatchEvent(event);
+    
+    return () => {
+      // Ensure nav is shown when component unmounts or modal closes
+      const event = new CustomEvent('toggle-nav', { 
+        detail: { hidden: false } 
+      });
+      window.dispatchEvent(event);
+    };
+  }, []);
 
   return (
     <motion.div 
@@ -141,7 +172,7 @@ function StoryViewer({
           {currentGroup.stories.map((_, idx) => (
             <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-white transition-all duration-100 ease-linear"
+                className="h-full bg-white"
                 style={{ width: `${idx < storyIndex ? 100 : idx === storyIndex ? progress : 0}%` }}
               />
             </div>
@@ -149,12 +180,25 @@ function StoryViewer({
         </div>
 
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 pt-6 px-4 pb-4 bg-gradient-to-b from-black/60 to-transparent z-10 flex items-center gap-3">
-          <img src={currentGroup.user_avatar} alt={currentGroup.user_name} className="w-10 h-10 rounded-full border border-white/20" />
-          <div>
-            <p className="text-white font-bold text-sm">{currentGroup.user_name}</p>
-            <p className="text-white/70 text-xs">{new Date(currentStory.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
+        <div className="absolute top-0 left-0 right-0 pt-6 px-4 pb-4 bg-gradient-to-b from-black/60 to-transparent z-30 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src={currentGroup.user_avatar} alt={currentGroup.user_name} className="w-10 h-10 rounded-full border border-white/20" />
+            <div>
+              <p className="text-white font-bold text-sm">{currentGroup.user_name}</p>
+              <p className="text-white/70 text-xs">{formatDateWIB(currentStory.created_at)}</p>
+            </div>
           </div>
+          
+          {(Number(currentStory.user_id) === Number(currentUser.id) || currentUser.role === 'admin') && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
+              disabled={isDeleting}
+              className="p-2 text-white/70 hover:text-red-500 transition-colors"
+              title="Hapus Cerita"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Tap Areas */}
@@ -173,23 +217,30 @@ function StoryViewer({
             transition={{ duration: 0.2 }}
             className="w-full h-full flex items-center justify-center relative"
           >
-            {currentStory.media_type === 'video' ? (
-              <video 
-                ref={videoRef}
-                src={currentStory.media_url} 
-                autoPlay 
-                playsInline
-                onEnded={handleNext}
-                onTimeUpdate={handleVideoTimeUpdate}
-                className="w-full h-full object-contain" 
-              />
-            ) : (
-              <img 
-                src={currentStory.media_url} 
-                alt="Story" 
-                className="w-full h-full object-cover" 
-              />
-            )}
+            <TransformWrapper>
+              <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
+                {currentStory.media_type === 'video' ? (
+                  <video 
+                    ref={videoRef}
+                    src={currentStory.media_url} 
+                    autoPlay 
+                    playsInline
+                    muted={false}
+                    onEnded={handleNext}
+                    onTimeUpdate={handleVideoTimeUpdate}
+                    className="w-full h-full object-contain" 
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                    <img 
+                      src={currentStory.media_url} 
+                      alt="Story" 
+                      className="w-full h-full object-contain" 
+                    />
+                  </div>
+                )}
+              </TransformComponent>
+            </TransformWrapper>
 
             {/* Text Overlays */}
             {currentStory.text_overlays?.map((overlay, idx) => (
@@ -237,7 +288,7 @@ function StoryViewer({
               className="flex items-center gap-2 bg-black/50 text-white px-4 py-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition-colors"
             >
               <Eye className="w-4 h-4" />
-              <span className="text-sm font-medium">{currentStory.views?.length || 0} Tayangan</span>
+              <span className="text-sm font-medium">{currentStory.views?.filter(v => v.id !== currentUser.id).length || 0} Tayangan</span>
             </button>
           </div>
         )}
@@ -255,23 +306,23 @@ function StoryViewer({
               <div className="p-4 border-b border-slate-800 flex justify-between items-center">
                 <h3 className="text-white font-bold flex items-center gap-2">
                   <Eye className="w-5 h-5" />
-                  Tayangan ({currentStory.views?.length || 0})
+                  Tayangan ({currentStory.views?.filter(v => v.id !== currentUser.id).length || 0})
                 </h3>
                 <button onClick={() => { setShowViewers(false); setIsPaused(false); }} className="text-slate-400 hover:text-white">
                   <X className="w-6 h-6" />
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 pb-8 md:pb-4">
-                {currentStory.views?.length === 0 ? (
+                {currentStory.views?.filter(v => v.id !== currentUser.id).length === 0 ? (
                   <p className="text-slate-400 text-center mt-4">Belum ada yang melihat cerita ini.</p>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {currentStory.views?.map(viewer => (
+                    {currentStory.views?.filter(v => v.id !== currentUser.id).map(viewer => (
                       <div key={viewer.id} className="flex items-center gap-3">
                         <img src={viewer.avatar} alt={viewer.name} className="w-10 h-10 rounded-full" />
                         <div>
                           <p className="text-white font-medium">{viewer.name}</p>
-                          <p className="text-slate-400 text-xs">{new Date(viewer.viewed_at).toLocaleString('id-ID')}</p>
+                          <p className="text-slate-400 text-xs">{formatDateWIB(viewer.viewed_at)}</p>
                         </div>
                       </div>
                     ))}
@@ -294,7 +345,7 @@ export default function Stories({ user }: { user: User }) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMedia, setUploadMedia] = useState<{ url: string, type: 'image' | 'video' } | null>(null);
   
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   
   // Text Overlay State
   const [textOverlay, setTextOverlay] = useState<{ text: string, font: string, color: string, x: number, y: number } | null>(null);
@@ -314,30 +365,16 @@ export default function Stories({ user }: { user: User }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  
+  const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isLongPress = useRef(false);
 
   useEffect(() => {
-    fetchStories();
-    
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'story:created') {
-        setStories(prev => [data.story, ...prev]);
-      }
-    };
-    return () => ws.close();
+    const unsubscribe = listenToStories((fetchedStories) => {
+      setStories(fetchedStories);
+    });
+    return () => unsubscribe();
   }, []);
-
-  const fetchStories = async () => {
-    try {
-      const res = await fetch('/api/stories');
-      const data = await res.json();
-      setStories(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -354,6 +391,7 @@ export default function Stories({ user }: { user: User }) {
       if (event.target?.result) {
         setUploadMedia({ url: event.target.result as string, type: isVideo ? 'video' : 'image' });
         setShowUpload(true);
+        stopCamera();
       }
       // Reset input
       if (fileInputRef.current) {
@@ -441,7 +479,8 @@ export default function Stories({ user }: { user: User }) {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
+        const mimeType = mediaRecorder.mimeType || 'video/webm';
+        const blob = new Blob(chunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
         setUploadMedia({ url, type: 'video' });
         stopCamera();
@@ -454,10 +493,32 @@ export default function Stories({ user }: { user: User }) {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
+  };
+
+  const handlePressStart = () => {
+    isLongPress.current = false;
+    pressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+      startRecording();
+    }, 500); // 500ms threshold for long press
+  };
+
+  const handlePressEnd = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+
+    if (isLongPress.current) {
+      stopRecording();
+    } else {
+      capturePhoto();
+    }
+    isLongPress.current = false;
   };
 
   const searchUsers = async (query: string) => {
@@ -466,8 +527,7 @@ export default function Stories({ user }: { user: User }) {
       return;
     }
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
+      const data = await search(query);
       setTagSuggestions(data.users);
     } catch (e) {
       console.error(e);
@@ -486,27 +546,18 @@ export default function Stories({ user }: { user: User }) {
     
     setIsUploading(true);
     try {
-      const res = await fetch('/api/stories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          media_url: uploadMedia.url,
-          media_type: uploadMedia.type,
-          text_overlays: textOverlay ? [textOverlay] : [],
-          tags: taggedUsers
-        })
+      await createStory({
+        user_id: user.id,
+        media_url: uploadMedia.url,
+        media_type: uploadMedia.type,
+        text_overlays: textOverlay ? [textOverlay] : [],
+        tags: taggedUsers
       });
-      
-      if (!res.ok) {
-        throw new Error('Failed to upload');
-      }
       
       setShowUpload(false);
       setUploadMedia(null);
       setTextOverlay(null);
       setTaggedUsers([]);
-      fetchStories();
     } catch (e) {
       console.error(e);
       alert('Gagal mengunggah cerita. Silakan coba lagi.');
@@ -526,9 +577,29 @@ export default function Stories({ user }: { user: User }) {
     }
     acc[story.user_id].stories.push(story);
     return acc;
-  }, {} as Record<number, StoryGroup>);
+  }, {} as Record<string, StoryGroup>);
 
   const storyGroups: StoryGroup[] = Object.values(groupedStories);
+
+  useEffect(() => {
+    if (showCamera && !cameraStream) {
+      startCamera();
+    }
+    
+    // Dispatch event to toggle bottom navigation
+    const event = new CustomEvent('toggle-nav', { 
+      detail: { hidden: showCamera || showUpload } 
+    });
+    window.dispatchEvent(event);
+    
+    return () => {
+      // Ensure nav is shown when component unmounts or modal closes
+      const event = new CustomEvent('toggle-nav', { 
+        detail: { hidden: false } 
+      });
+      window.dispatchEvent(event);
+    };
+  }, [showCamera, showUpload]);
 
   return (
     <div className="w-full py-2">
@@ -545,23 +616,38 @@ export default function Stories({ user }: { user: User }) {
         </div>
 
         {/* Story List */}
-        {storyGroups.map((group, index) => (
-          <div key={group.user_id} className="flex flex-col items-center gap-1 shrink-0 cursor-pointer" onClick={() => {
-            setActiveStoryGroupIndex(index);
-          }}>
-            <div className="w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
-              <img src={group.user_avatar} alt={group.user_name} className="w-full h-full rounded-full object-cover border-2 border-white" />
+        {storyGroups.map((group, index) => {
+          const allViewed = group.stories.every(story => story.views?.some(v => v.id === user.id));
+          return (
+            <div key={group.user_id} className="flex flex-col items-center gap-1 shrink-0 cursor-pointer" onClick={() => {
+              setActiveStoryGroupIndex(index);
+            }}>
+              <div className={clsx(
+                "w-16 h-16 rounded-full flex items-center justify-center",
+                !allViewed && "p-0.5 bg-gradient-to-tr from-yellow-400 to-fuchsia-600"
+              )}>
+                <img 
+                  src={group.user_avatar} 
+                  alt={group.user_name} 
+                  className={clsx(
+                    "w-full h-full rounded-full object-cover",
+                    allViewed ? "border-2 border-slate-200 p-0.5" : "border-2 border-white"
+                  )} 
+                />
+              </div>
+              <span className="text-xs font-medium text-slate-600 truncate w-16 text-center">{group.user_name.split(' ')[0]}</span>
             </div>
-            <span className="text-xs font-medium text-slate-600 truncate w-16 text-center">{group.user_name.split(' ')[0]}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      <input type="file" accept="image/*,video/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
 
       {/* Camera Modal */}
       <AnimatePresence>
         {showCamera && (
           <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed inset-0 z-50 bg-black flex flex-col"
           >
             <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-10">
@@ -577,19 +663,9 @@ export default function Stories({ user }: { user: User }) {
                   <span className="text-sm font-medium">Galeri</span>
                 </button>
               </div>
-              <input type="file" accept="image/*,video/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
             </div>
             
             <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-              {!cameraStream && (
-                <div className="text-center">
-                  <button onClick={startCamera} className="px-6 py-3 bg-emerald-500 text-white rounded-full font-bold flex items-center gap-2 mx-auto mb-4">
-                    <Camera className="w-5 h-5" />
-                    Buka Kamera
-                  </button>
-                  <p className="text-white/70 text-sm">Atau pilih dari galeri</p>
-                </div>
-              )}
               <video 
                 ref={videoRef} 
                 autoPlay 
@@ -603,11 +679,11 @@ export default function Stories({ user }: { user: User }) {
             {cameraStream && (
               <div className="h-32 bg-black flex items-center justify-center pb-8 md:pb-0">
                 <button 
-                  onClick={capturePhoto}
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onTouchStart={startRecording}
-                  onTouchEnd={stopRecording}
+                  onMouseDown={handlePressStart}
+                  onMouseUp={handlePressEnd}
+                  onTouchStart={handlePressStart}
+                  onTouchEnd={handlePressEnd}
+                  onContextMenu={(e) => e.preventDefault()}
                   className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all ${isRecording ? 'bg-red-500 scale-110' : 'bg-transparent'}`}
                 >
                   <div className={`w-16 h-16 rounded-full ${isRecording ? 'bg-red-500' : 'bg-white'}`} />
@@ -641,12 +717,16 @@ export default function Stories({ user }: { user: User }) {
             </div>
             
             <div className="w-full h-full md:h-auto md:max-w-md bg-slate-900 md:rounded-2xl overflow-hidden shadow-2xl flex flex-col md:max-h-[85vh] relative">
-              <div className="flex-1 min-h-0 bg-black relative flex items-center justify-center">
-                {uploadMedia.type === 'video' ? (
-                  <video src={uploadMedia.url} controls className="w-full h-full object-contain" />
-                ) : (
-                  <img src={uploadMedia.url} alt="Preview" className="w-full h-full object-cover" />
-                )}
+              <div className="flex-1 min-h-0 bg-slate-900 relative flex items-center justify-center">
+                <TransformWrapper>
+                  <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
+                    {uploadMedia.type === 'video' ? (
+                      <video src={uploadMedia.url} controls autoPlay className="w-full h-full object-contain" />
+                    ) : (
+                      <img src={uploadMedia.url} alt="Preview" className="w-full h-full object-contain" />
+                    )}
+                  </TransformComponent>
+                </TransformWrapper>
                 
                 {/* Text Overlay Display */}
                 {textOverlay && !isEditingText && (
@@ -833,7 +913,9 @@ export default function Stories({ user }: { user: User }) {
           <StoryViewer 
             storyGroups={storyGroups} 
             initialGroupIndex={activeStoryGroupIndex} 
-            onClose={() => setActiveStoryGroupIndex(null)} 
+            onClose={() => {
+              setActiveStoryGroupIndex(null);
+            }} 
             currentUser={user}
           />
         )}

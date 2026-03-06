@@ -3,91 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EnyThing App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>My Google AI Studio App</title>
   </head>
-  <body class="bg-slate-900 text-white">
-    <div id="root">
-        <div class="min-h-screen flex items-center justify-center p-4">
-            <div class="w-full max-w-md bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl">
-                <h1 class="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">Koys App</h1>
-
-                <div id="auth-ui">
-                    <div class="space-y-4">
-                        <input id="email" type="email" placeholder="Email" class="w-full bg-slate-700 border border-slate-600 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white">
-                        <input id="password" type="password" placeholder="Password" class="w-full bg-slate-700 border border-slate-600 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white">
-                        <button onclick="authAction('login')" class="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg font-bold">Masuk</button>
-                        <p class="text-center text-sm text-slate-400">Belum punya akun? <button onclick="authAction('daftar')" class="text-blue-400 hover:underline">Daftar</button></p>
-                    </div>
-                </div>
-
-                <div id="app-ui" class="hidden space-y-4">
-                    <div class="flex justify-between items-center mb-2">
-                        <span id="user-display" class="text-xs italic text-slate-400"></span>
-                        <span id="admin-badge" class="hidden bg-amber-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full">ADMIN</span>
-                    </div>
-                    <textarea id="userInput" placeholder="Tulis catatan..." class="w-full bg-slate-700 p-3 rounded-lg h-32 border border-slate-600 text-white"></textarea>
-                    <button onclick="simpanData()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">Simpan ke Cloud</button>
-                    <button onclick="logout()" class="w-full text-slate-500 text-xs mt-4">Logout</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyD7xhsEmyPM5aKV1M9zvuQitnG1KRGdNsE",
-            authDomain: "koys-92fd5.firebaseapp.com",
-            projectId: "koys-92fd5",
-            storageBucket: "koys-92fd5.firebasestorage.app",
-            messagingSenderId: "60255465436",
-            appId: "1:60255465436:web:cfd7b661d5a55695d2a919"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const EMAIL_ADMIN = "admin@koys.com"; // Ganti sesukamu
-
-        window.authAction = async (tipe) => {
-            const email = document.getElementById('email').value;
-            const pass = document.getElementById('password').value;
-            try {
-                if(tipe === 'daftar') {
-                    await createUserWithEmailAndPassword(auth, email, pass);
-                    alert("Berhasil!");
-                } else {
-                    await signInWithEmailAndPassword(auth, email, pass);
-                }
-            } catch (e) { alert(e.message); }
-        };
-
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                document.getElementById('auth-ui').classList.add('hidden');
-                document.getElementById('app-ui').classList.remove('hidden');
-                document.getElementById('user-display').innerText = user.email;
-                if(user.email === EMAIL_ADMIN) document.getElementById('admin-badge').classList.remove('hidden');
-                const docSnap = await getDoc(doc(db, "data_user", user.uid));
-                if (docSnap.exists()) document.getElementById('userInput').value = docSnap.data().teks;
-            } else {
-                document.getElementById('auth-ui').classList.remove('hidden');
-                document.getElementById('app-ui').classList.add('hidden');
-            }
-        });
-
-        window.simpanData = async () => {
-            const user = auth.currentUser;
-            const teks = document.getElementById('userInput').value;
-            await setDoc(doc(db, "data_user", user.uid), { teks: teks, update: new Date() });
-            alert("Tersimpan!");
-        };
-
-        window.logout = () => signOut(auth);
-    </script>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+

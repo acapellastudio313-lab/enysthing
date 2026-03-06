@@ -3,6 +3,7 @@ import { User, LeaderboardEntry, ElectionStatus } from '../types';
 import { Trophy, Medal, ArrowUpRight, Clock, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion } from 'motion/react';
+import { getLeaderboard, getNonVoters, listenToSettings } from '../lib/db';
 
 export default function Leaderboard({ user }: { user: User }) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -13,18 +14,35 @@ export default function Leaderboard({ user }: { user: User }) {
   const [showNonVoters, setShowNonVoters] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/leaderboard').then(res => res.json()),
-      fetch('/api/non-voters').then(res => res.json()),
-      fetch(`/api/settings/status?t=${Date.now()}`).then(res => res.json()),
-      fetch('/api/settings/leaderboard').then(res => res.json())
-    ]).then(([leaderboardData, nonVotersData, statusData, settingsData]) => {
-      setLeaderboard(leaderboardData);
-      setNonVoters(nonVotersData);
-      setElectionStatus(statusData.status);
-      setLeaderboardSettings(settingsData);
-      setLoading(false);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [leaderboardData, nonVotersData] = await Promise.all([
+          getLeaderboard(),
+          getNonVoters()
+        ]);
+        setLeaderboard(leaderboardData);
+        setNonVoters(nonVotersData);
+      } catch (err) {
+        console.error('Error fetching leaderboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+
+    const unsubscribeSettings = listenToSettings((settings) => {
+      if (settings.election_status) {
+        setElectionStatus(settings.election_status as ElectionStatus);
+      }
+      setLeaderboardSettings({
+        title: settings.leaderboard_title || 'Klasemen Sementara',
+        description: settings.leaderboard_description || 'Pemilihan Agen Perubahan 2024'
+      });
     });
+
+    return () => unsubscribeSettings();
   }, []);
 
   if (loading) return <div className="p-8 text-center text-slate-500">Memuat klasemen...</div>;

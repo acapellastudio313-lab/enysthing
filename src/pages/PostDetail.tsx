@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { User, Post } from '../types';
 import PostItem from '../components/PostItem';
 import { ArrowLeft } from 'lucide-react';
+import { getPost, pinPost, likePost } from '../lib/db';
 
 export default function PostDetail({ user }: { user: User }) {
   const { postId } = useParams();
@@ -10,41 +11,38 @@ export default function PostDetail({ user }: { user: User }) {
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchPost = () => {
-    fetch(`/api/posts/${postId}?userId=${user.id}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Post not found');
-        return res.json();
-      })
-      .then(data => {
-        setPost(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+  const fetchPost = async () => {
+    if (!postId) return;
+    try {
+      const data = await getPost(postId, user.id);
+      setPost(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchPost();
   }, [postId, user.id]);
 
-  const handleLike = async (id: number) => {
-    await fetch(`/api/posts/${id}/like`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id }),
-    });
-    fetchPost();
+  const handlePin = async (id: string, isPinned: boolean) => {
+    try {
+      await pinPost(id, !isPinned);
+      fetchPost();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handlePin = async (postId: number, isPinned: boolean) => {
-    await fetch(`/api/admin/posts/${postId}/pin`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_pinned: !isPinned }),
-    });
-    fetchPost();
+  const handleLike = async (id: string) => {
+    try {
+      await likePost(id, user.id);
+      fetchPost();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Memuat postingan...</div>;
@@ -66,9 +64,8 @@ export default function PostDetail({ user }: { user: User }) {
         <PostItem 
           post={post} 
           user={user} 
-          onLike={handleLike} 
+          onLike={handleLike}
           onPin={handlePin}
-          onCommentAdded={fetchPost}
           onPostUpdated={(updatedPost) => setPost(updatedPost)}
           onPostDeleted={() => navigate('/')}
           defaultShowComments={true}

@@ -8,246 +8,236 @@ import { WebSocketServer, WebSocket } from 'ws';
 const db = new Database('app.db');
 db.exec('PRAGMA foreign_keys = ON');
 
-// Initialize DB
-db.exec(`
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sender_id INTEGER,
-    receiver_id INTEGER,
-    content TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    is_read INTEGER DEFAULT 0,
-    FOREIGN KEY(sender_id) REFERENCES users(id),
-    FOREIGN KEY(receiver_id) REFERENCES users(id)
-  );
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    name TEXT,
-    avatar TEXT,
-    role TEXT DEFAULT 'voter',
-    cover_url TEXT,
-    bio TEXT,
-    location TEXT,
-    join_date TEXT,
-    cover_position TEXT DEFAULT '50% 50%',
-    avatar_position TEXT DEFAULT '50% 50%',
-    is_verified INTEGER DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS candidates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    vision TEXT,
-    mission TEXT,
-    innovation_program TEXT,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-  CREATE TABLE IF NOT EXISTS posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    author_id INTEGER,
-    content TEXT,
-    image_url TEXT,
-    audio_url TEXT,
-    is_pinned INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(author_id) REFERENCES users(id)
-  );
-  CREATE TABLE IF NOT EXISTS comments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id INTEGER,
-    author_id INTEGER,
-    content TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(post_id) REFERENCES posts(id),
-    FOREIGN KEY(author_id) REFERENCES users(id)
-  );
-  CREATE TABLE IF NOT EXISTS likes (
-    post_id INTEGER,
-    user_id INTEGER,
-    PRIMARY KEY(post_id, user_id),
-    FOREIGN KEY(post_id) REFERENCES posts(id),
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-  CREATE TABLE IF NOT EXISTS votes (
-    voter_id INTEGER PRIMARY KEY,
-    candidate_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(voter_id) REFERENCES users(id),
-    FOREIGN KEY(candidate_id) REFERENCES candidates(id)
-  );
-  CREATE TABLE IF NOT EXISTS notifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    actor_id INTEGER,
-    type TEXT,
-    post_id INTEGER,
-    is_read INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id),
-    FOREIGN KEY(actor_id) REFERENCES users(id),
-    FOREIGN KEY(post_id) REFERENCES posts(id)
-  );
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  );
-`);
-console.log('Settings table ensured');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS stories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    media_url TEXT,
-    media_type TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME,
-    text_overlays TEXT DEFAULT '[]',
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
-console.log('Stories table ensured');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS story_views (
-    story_id INTEGER,
-    user_id INTEGER,
-    viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (story_id, user_id),
-    FOREIGN KEY(story_id) REFERENCES stories(id) ON DELETE CASCADE,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
-console.log('Story views table ensured');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS story_tags (
-    story_id INTEGER,
-    tagged_user_id INTEGER,
-    x REAL DEFAULT 0,
-    y REAL DEFAULT 0,
-    FOREIGN KEY(story_id) REFERENCES stories(id) ON DELETE CASCADE,
-    FOREIGN KEY(tagged_user_id) REFERENCES users(id)
-  );
-`);
-console.log('Story tags table ensured');
-
-// Add columns if they don't exist (for backward compatibility with existing databases)
-try { db.exec(`ALTER TABLE stories ADD COLUMN text_overlays TEXT DEFAULT '[]'`); } catch (e) {}
-try { db.exec(`ALTER TABLE story_tags ADD COLUMN x REAL DEFAULT 0`); } catch (e) {}
-try { db.exec(`ALTER TABLE story_tags ADD COLUMN y REAL DEFAULT 0`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN cover_url TEXT`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN bio TEXT`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN location TEXT`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN join_date TEXT`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN cover_position TEXT DEFAULT '50% 50%'`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN avatar_position TEXT DEFAULT '50% 50%'`); } catch (e) {}
-try { db.exec(`ALTER TABLE candidates ADD COLUMN innovation_program TEXT`); } catch (e) {}
-try { db.exec(`ALTER TABLE candidates ADD COLUMN image_url TEXT`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN is_approved INTEGER DEFAULT 1`); } catch (e) {}
-try { db.exec(`ALTER TABLE posts ADD COLUMN audio_url TEXT`); } catch (e) {}
-try { db.exec(`ALTER TABLE posts ADD COLUMN is_pinned INTEGER DEFAULT 0`); } catch (e) {}
-try { db.exec(`ALTER TABLE users ADD COLUMN password TEXT`); } catch (e) {}
-
-// Set default passwords
-db.prepare("UPDATE users SET password = 'password' WHERE password IS NULL AND username != 'admin'").run();
-db.prepare("UPDATE users SET password = 'admins' WHERE username = 'admin'").run();
-
-// Initialize settings
-const status = db.prepare('SELECT value FROM settings WHERE key = ?').get('election_status');
-if (!status) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('election_status', 'not_started');
-}
-
-const endDate = db.prepare('SELECT value FROM settings WHERE key = ?').get('election_end_date');
-if (!endDate) {
-  // Default to 7 days from now
-  const defaultEndDate = new Date();
-  defaultEndDate.setDate(defaultEndDate.getDate() + 7);
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('election_end_date', defaultEndDate.toISOString());
-}
-
-const leaderboardTitle = db.prepare('SELECT value FROM settings WHERE key = ?').get('leaderboard_title');
-if (!leaderboardTitle) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('leaderboard_title', 'Klasemen Sementara');
-}
-
-const leaderboardDesc = db.prepare('SELECT value FROM settings WHERE key = ?').get('leaderboard_description');
-if (!leaderboardDesc) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('leaderboard_description', 'Pemilihan Agen Perubahan 2024');
-}
-
-const exploreTitle = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_title');
-if (!exploreTitle) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_title', 'Informasi Pemilihan');
-}
-
-const exploreSchedule = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_schedule');
-if (!exploreSchedule) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_schedule', '1 - 15 November 2024');
-}
-
-const exploreRequirement = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_requirement');
-if (!exploreRequirement) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_requirement', 'Seluruh Pegawai PA Prabumulih');
-}
-
-const exploreHelp = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_help');
-if (!exploreHelp) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_help', 'Hubungi panitia jika mengalami kendala saat melakukan voting.');
-}
-
-const candidateLabel = db.prepare('SELECT value FROM settings WHERE key = ?').get('candidate_label');
-if (!candidateLabel) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('candidate_label', 'Agen Perubahan');
-}
-
-const candidateDescLabel = db.prepare('SELECT value FROM settings WHERE key = ?').get('candidate_desc_label');
-if (!candidateDescLabel) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('candidate_desc_label', 'Visi & Misi');
-}
-
-const appName = db.prepare('SELECT value FROM settings WHERE key = ?').get('app_name');
-if (!appName) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('app_name', 'E-Voting App');
-}
-
-const appIcon = db.prepare('SELECT value FROM settings WHERE key = ?').get('app_icon');
-if (!appIcon) {
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('app_icon', 'Shield');
-}
-
-// Seed data
-const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-if (userCount.count === 0) {
-  const insertUser = db.prepare('INSERT INTO users (username, name, avatar, role, password) VALUES (?, ?, ?, ?, ?)');
-  insertUser.run('admin', 'Administrator', 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 'admin', 'admins');
-  insertUser.run('ahmad', 'Ahmad Hakim', 'https://api.dicebear.com/7.x/avataaars/svg?seed=ahmad', 'candidate', 'password');
-  insertUser.run('budi', 'Budi Santoso', 'https://api.dicebear.com/7.x/avataaars/svg?seed=budi', 'candidate', 'password');
-  insertUser.run('citra', 'Citra Lestari', 'https://api.dicebear.com/7.x/avataaars/svg?seed=citra', 'candidate', 'password');
-  insertUser.run('dina', 'Dina Mariana', 'https://api.dicebear.com/7.x/avataaars/svg?seed=dina', 'voter', 'password');
-  insertUser.run('eko', 'Eko Prasetyo', 'https://api.dicebear.com/7.x/avataaars/svg?seed=eko', 'voter', 'password');
-
-  const insertCandidate = db.prepare('INSERT INTO candidates (user_id, vision, mission) VALUES (?, ?, ?)');
-  insertCandidate.run(2, 'Mewujudkan PA Prabumulih yang Modern dan Melayani', '1. Digitalisasi layanan\\n2. Peningkatan SDM');
-  insertCandidate.run(3, 'Pelayanan Prima untuk Masyarakat Pencari Keadilan', '1. Mempercepat proses administrasi\\n2. Budaya senyum sapa salam');
-  insertCandidate.run(4, 'Integritas dan Transparansi dalam Setiap Layanan', '1. Keterbukaan informasi\\n2. Anti korupsi dan gratifikasi');
-
-  const insertPost = db.prepare('INSERT INTO posts (author_id, content) VALUES (?, ?)');
-  insertPost.run(2, 'Mari bersama-sama mewujudkan Pengadilan Agama Prabumulih yang lebih baik! Dukung saya menjadi Agen Perubahan 2024. 🚀 #PA_Prabumulih #AgenPerubahan');
-  insertPost.run(3, 'Pelayanan prima adalah kunci. Saya berkomitmen untuk membawa perubahan positif di lingkungan kerja kita. Mohon doa dan dukungannya! 🙏');
-  insertPost.run(4, 'Integritas bukan hanya kata-kata, tapi tindakan nyata. Mari kita bangun zona integritas bersama-sama! ⚖️');
-  insertPost.run(5, 'Wah, calon-calon tahun ini luar biasa semua! Bingung mau pilih siapa 🤔');
-}
-
 async function startServer() {
+  // Initialize DB
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_id INTEGER,
+      receiver_id INTEGER,
+      content TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_read INTEGER DEFAULT 0,
+      FOREIGN KEY(sender_id) REFERENCES users(id),
+      FOREIGN KEY(receiver_id) REFERENCES users(id)
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE,
+      name TEXT,
+      avatar TEXT,
+      role TEXT DEFAULT 'voter',
+      cover_url TEXT,
+      bio TEXT,
+      location TEXT,
+      join_date TEXT,
+      cover_position TEXT DEFAULT '50% 50%',
+      avatar_position TEXT DEFAULT '50% 50%',
+      is_verified INTEGER DEFAULT 0,
+      is_approved INTEGER DEFAULT 1,
+      password TEXT
+    );
+    CREATE TABLE IF NOT EXISTS candidates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      vision TEXT,
+      mission TEXT,
+      innovation_program TEXT,
+      image_url TEXT,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      author_id INTEGER,
+      content TEXT,
+      image_url TEXT,
+      audio_url TEXT,
+      is_pinned INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(author_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER,
+      author_id INTEGER,
+      content TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(post_id) REFERENCES posts(id),
+      FOREIGN KEY(author_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS likes (
+      post_id INTEGER,
+      user_id INTEGER,
+      PRIMARY KEY(post_id, user_id),
+      FOREIGN KEY(post_id) REFERENCES posts(id),
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS votes (
+      voter_id INTEGER PRIMARY KEY,
+      candidate_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(voter_id) REFERENCES users(id),
+      FOREIGN KEY(candidate_id) REFERENCES candidates(id)
+    );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      actor_id INTEGER,
+      type TEXT,
+      post_id INTEGER,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      story_id INTEGER,
+      FOREIGN KEY(user_id) REFERENCES users(id),
+      FOREIGN KEY(actor_id) REFERENCES users(id),
+      FOREIGN KEY(post_id) REFERENCES posts(id)
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS stories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      media_url TEXT,
+      media_type TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME,
+      text_overlays TEXT DEFAULT '[]',
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS story_views (
+      story_id INTEGER,
+      user_id INTEGER,
+      viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (story_id, user_id),
+      FOREIGN KEY(story_id) REFERENCES stories(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS story_tags (
+      story_id INTEGER,
+      tagged_user_id INTEGER,
+      x REAL DEFAULT 0,
+      y REAL DEFAULT 0,
+      FOREIGN KEY(story_id) REFERENCES stories(id) ON DELETE CASCADE,
+      FOREIGN KEY(tagged_user_id) REFERENCES users(id)
+    );
+  `);
+  console.log('Database tables ensured');
+
+  // Add columns if they don't exist (for backward compatibility with existing databases)
+  try { db.exec(`ALTER TABLE stories ADD COLUMN text_overlays TEXT DEFAULT '[]'`); } catch (e) {}
+  try { db.exec(`ALTER TABLE story_tags ADD COLUMN x REAL DEFAULT 0`); } catch (e) {}
+  try { db.exec(`ALTER TABLE story_tags ADD COLUMN y REAL DEFAULT 0`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN cover_url TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN bio TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN location TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN join_date TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN cover_position TEXT DEFAULT '50% 50%'`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN avatar_position TEXT DEFAULT '50% 50%'`); } catch (e) {}
+  try { db.exec(`ALTER TABLE candidates ADD COLUMN innovation_program TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE candidates ADD COLUMN image_url TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN is_approved INTEGER DEFAULT 1`); } catch (e) {}
+  try { db.exec(`ALTER TABLE posts ADD COLUMN audio_url TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE posts ADD COLUMN is_pinned INTEGER DEFAULT 0`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN password TEXT`); } catch (e) {}
+  try { db.exec(`ALTER TABLE notifications ADD COLUMN story_id INTEGER REFERENCES stories(id)`); } catch (e) {}
+
+  // Set default passwords
+  db.prepare("UPDATE users SET password = 'password' WHERE password IS NULL AND username != 'admin'").run();
+  db.prepare("UPDATE users SET password = 'admins' WHERE username = 'admin'").run();
+
+  // Initialize settings
+  const status = db.prepare('SELECT value FROM settings WHERE key = ?').get('election_status');
+  if (!status) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('election_status', 'not_started');
+  }
+  
+  const endDate = db.prepare('SELECT value FROM settings WHERE key = ?').get('election_end_date');
+  if (!endDate) {
+    // Default to 7 days from now
+    const defaultEndDate = new Date();
+    defaultEndDate.setDate(defaultEndDate.getDate() + 7);
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('election_end_date', defaultEndDate.toISOString());
+  }
+
+  const leaderboardTitle = db.prepare('SELECT value FROM settings WHERE key = ?').get('leaderboard_title');
+  if (!leaderboardTitle) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('leaderboard_title', 'Klasemen Sementara');
+  }
+
+  const leaderboardDesc = db.prepare('SELECT value FROM settings WHERE key = ?').get('leaderboard_description');
+  if (!leaderboardDesc) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('leaderboard_description', 'Pemilihan Agen Perubahan 2024');
+  }
+
+  const exploreTitle = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_title');
+  if (!exploreTitle) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_title', 'Informasi Pemilihan');
+  }
+
+  const exploreSchedule = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_schedule');
+  if (!exploreSchedule) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_schedule', '1 - 15 November 2024');
+  }
+
+  const exploreRequirement = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_requirement');
+  if (!exploreRequirement) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_requirement', 'Seluruh Pegawai PA Prabumulih');
+  }
+
+  const exploreHelp = db.prepare('SELECT value FROM settings WHERE key = ?').get('explore_help');
+  if (!exploreHelp) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('explore_help', 'Hubungi panitia jika mengalami kendala saat melakukan voting.');
+  }
+
+  const candidateLabel = db.prepare('SELECT value FROM settings WHERE key = ?').get('candidate_label');
+  if (!candidateLabel) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('candidate_label', 'Agen Perubahan');
+  }
+
+  const candidateDescLabel = db.prepare('SELECT value FROM settings WHERE key = ?').get('candidate_desc_label');
+  if (!candidateDescLabel) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('candidate_desc_label', 'Visi & Misi');
+  }
+
+  const appName = db.prepare('SELECT value FROM settings WHERE key = ?').get('app_name');
+  if (!appName) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('app_name', 'E-Voting App');
+  }
+
+  const appIcon = db.prepare('SELECT value FROM settings WHERE key = ?').get('app_icon');
+  if (!appIcon) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('app_icon', 'Shield');
+  }
+
+  // Seed data
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+  if (userCount.count === 0) {
+    const insertUser = db.prepare('INSERT INTO users (username, name, avatar, role, password) VALUES (?, ?, ?, ?, ?)');
+    insertUser.run('admin', 'Administrator', 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 'admin', 'admins');
+    insertUser.run('ahmad', 'Ahmad Hakim', 'https://api.dicebear.com/7.x/avataaars/svg?seed=ahmad', 'candidate', 'password');
+    insertUser.run('budi', 'Budi Santoso', 'https://api.dicebear.com/7.x/avataaars/svg?seed=budi', 'candidate', 'password');
+    insertUser.run('citra', 'Citra Lestari', 'https://api.dicebear.com/7.x/avataaars/svg?seed=citra', 'candidate', 'password');
+    insertUser.run('dina', 'Dina Mariana', 'https://api.dicebear.com/7.x/avataaars/svg?seed=dina', 'voter', 'password');
+    insertUser.run('eko', 'Eko Prasetyo', 'https://api.dicebear.com/7.x/avataaars/svg?seed=eko', 'voter', 'password');
+
+    const insertCandidate = db.prepare('INSERT INTO candidates (user_id, vision, mission, innovation_program) VALUES (?, ?, ?, ?)');
+    insertCandidate.run(2, 'Mewujudkan PA Prabumulih yang Modern dan Melayani', '1. Digitalisasi layanan\\n2. Peningkatan SDM', '');
+    insertCandidate.run(3, 'Pelayanan Prima untuk Masyarakat Pencari Keadilan', '1. Mempercepat proses administrasi\\n2. Budaya senyum sapa salam', '');
+    insertCandidate.run(4, 'Integritas dan Transparansi dalam Setiap Layanan', '1. Keterbukaan informasi\\n2. Anti korupsi dan gratifikasi', '');
+
+    const insertPost = db.prepare('INSERT INTO posts (author_id, content) VALUES (?, ?)');
+    insertPost.run(2, 'Mari bersama-sama mewujudkan Pengadilan Agama Prabumulih yang lebih baik! Dukung saya menjadi Agen Perubahan 2024. 🚀 #PA_Prabumulih #AgenPerubahan');
+    insertPost.run(3, 'Pelayanan prima adalah kunci. Saya berkomitmen untuk membawa perubahan positif di lingkungan kerja kita. Mohon doa dan dukungannya! 🙏');
+    insertPost.run(4, 'Integritas bukan hanya kata-kata, tapi tindakan nyata. Mari kita bangun zona integritas bersama-sama! ⚖️');
+    insertPost.run(5, 'Wah, calon-calon tahun ini luar biasa semua! Bingung mau pilih siapa 🤔');
+  }
+
   const app = express();
   const httpServer = http.createServer(app);
   const wss = new WebSocketServer({ server: httpServer });
@@ -473,7 +463,7 @@ async function startServer() {
 
   app.delete('/api/candidates/:id', (req, res) => {
     const candidateId = Number(req.params.id);
-    const adminId = Number(req.body.adminId || req.query.adminId);
+    const adminId = Number(req.query.adminId || req.body.adminId);
 
     console.log(`[API] Admin ${adminId} attempting to delete candidate ${candidateId}`);
 
@@ -487,22 +477,18 @@ async function startServer() {
         return res.status(403).json({ error: 'Forbidden: Admin access required' });
       }
 
-      db.prepare('BEGIN TRANSACTION').run();
-      try {
+      const deleteTx = db.transaction(() => {
         const candidate = db.prepare('SELECT user_id FROM candidates WHERE id = ?').get(candidateId) as { user_id: number } | undefined;
         if (candidate) {
           db.prepare('UPDATE users SET role = ? WHERE id = ?').run('voter', candidate.user_id);
           db.prepare('DELETE FROM votes WHERE candidate_id = ?').run(candidateId);
           db.prepare('DELETE FROM candidates WHERE id = ?').run(candidateId);
         }
-        
-        db.prepare('COMMIT').run();
-        console.log(`[API] Candidate ${candidateId} deleted successfully`);
-        res.json({ success: true });
-      } catch (transactionError) {
-        db.prepare('ROLLBACK').run();
-        throw transactionError;
-      }
+      });
+      
+      deleteTx();
+      console.log(`[API] Candidate ${candidateId} deleted successfully`);
+      res.json({ success: true });
     } catch (e) {
       console.error('Error deleting candidate:', e);
       res.status(500).json({ error: 'Gagal menghapus kandidat: ' + (e instanceof Error ? e.message : String(e)) });
@@ -662,9 +648,9 @@ async function startServer() {
             
             // Create notification for tagged user
             db.prepare(`
-              INSERT INTO notifications (user_id, type, source_user_id, source_id, content) 
-              VALUES (?, 'story_tag', ?, ?, ?)
-            `).run(taggedUserId, user_id, storyId, `${getAuthor.name} menandai Anda dalam cerita mereka.`);
+              INSERT INTO notifications (user_id, type, actor_id, story_id) 
+              VALUES (?, 'story_tag', ?, ?)
+            `).run(taggedUserId, user_id, storyId);
             
             broadcast({
               type: 'notification',
@@ -695,7 +681,50 @@ async function startServer() {
       res.json(storyWithDetails);
     } catch (e) {
       console.error('Error creating story:', e);
-      res.status(500).json({ error: 'Failed to create story' });
+      res.status(500).json({ error: 'DISTINCT ERROR: ' + (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  app.delete('/api/stories/:id', (req, res) => {
+    const storyId = Number(req.params.id);
+    const userId = Number(req.query.userId || req.body.userId);
+
+    try {
+      if (!userId || isNaN(userId)) {
+        return res.status(401).json({ error: 'Unauthorized: No valid user ID provided' });
+      }
+
+      const story = db.prepare('SELECT user_id FROM stories WHERE id = ?').get(storyId) as { user_id: number } | undefined;
+      if (!story) {
+        return res.status(404).json({ error: 'Story not found' });
+      }
+
+      const requestingUser = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as { role: string } | undefined;
+      if (!requestingUser) {
+        return res.status(401).json({ error: 'Unauthorized: User not found' });
+      }
+
+      const isAdmin = requestingUser.role === 'admin';
+      const isAuthor = Number(story.user_id) === userId;
+
+      if (!isAdmin && !isAuthor) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this story' });
+      }
+
+      const deleteTx = db.transaction(() => {
+        db.prepare('DELETE FROM story_views WHERE story_id = ?').run(storyId);
+        db.prepare('DELETE FROM story_tags WHERE story_id = ?').run(storyId);
+        db.prepare('DELETE FROM notifications WHERE story_id = ?').run(storyId);
+        db.prepare('DELETE FROM stories WHERE id = ?').run(storyId);
+      });
+      
+      deleteTx();
+      
+      broadcast({ type: 'story:deleted', storyId });
+      res.json({ success: true });
+    } catch (e) {
+      console.error('Error deleting story:', e);
+      res.status(500).json({ error: 'Failed to delete story: ' + (e instanceof Error ? e.message : String(e)) });
     }
   });
 
@@ -798,7 +827,7 @@ async function startServer() {
         return res.status(403).json({ error: 'Forbidden' });
       }
 
-      db.prepare('UPDATE posts SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(content, postId);
+      db.prepare('UPDATE posts SET content = ? WHERE id = ?').run(content, postId);
       const updatedPost = db.prepare(`
         SELECT p.*, u.name, u.avatar, u.username, u.is_verified,
           (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
@@ -818,39 +847,44 @@ async function startServer() {
 
   app.delete('/api/posts/:id', (req, res) => {
     const postId = req.params.id;
-    const { userId } = req.body; // ID of the user performing the action
+    const userId = Number(req.query.userId || req.body.userId); // ID of the user performing the action
 
     try {
-      const requestingUser = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as { role: string };
+      if (!userId || isNaN(userId)) {
+        return res.status(401).json({ error: 'Unauthorized: No valid user ID provided' });
+      }
+
+      const requestingUser = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as { role: string } | undefined;
       if (!requestingUser) {
         return res.status(401).json({ error: 'Unauthorized: User not found' });
       }
 
-      const post = db.prepare('SELECT author_id FROM posts WHERE id = ?').get(postId) as { author_id: number };
+      const post = db.prepare('SELECT author_id FROM posts WHERE id = ?').get(postId) as { author_id: number } | undefined;
       if (!post) {
         return res.status(404).json({ error: 'Post not found' });
       }
 
       const isAdmin = requestingUser.role === 'admin';
-      const isAuthor = post.author_id === userId;
+      const isAuthor = Number(post.author_id) === userId;
 
       if (!isAdmin && !isAuthor) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this post' });
       }
 
-      db.prepare('BEGIN').run();
-      db.prepare('DELETE FROM likes WHERE post_id = ?').run(postId);
-      db.prepare('DELETE FROM comments WHERE post_id = ?').run(postId);
-      db.prepare('DELETE FROM notifications WHERE post_id = ?').run(postId);
-      db.prepare('DELETE FROM posts WHERE id = ?').run(postId);
-      db.prepare('COMMIT').run();
+      const deleteTx = db.transaction(() => {
+        db.prepare('DELETE FROM likes WHERE post_id = ?').run(postId);
+        db.prepare('DELETE FROM comments WHERE post_id = ?').run(postId);
+        db.prepare('DELETE FROM notifications WHERE post_id = ?').run(postId);
+        db.prepare('DELETE FROM posts WHERE id = ?').run(postId);
+      });
+      
+      deleteTx();
 
       broadcast({ type: 'post:deleted', postId });
       res.json({ success: true });
     } catch (e) {
       console.error(`[API] Failed to delete post ${postId}:`, e);
-      db.prepare('ROLLBACK').run();
-      res.status(500).json({ error: 'Failed to delete post' });
+      res.status(500).json({ error: 'Failed to delete post: ' + (e instanceof Error ? e.message : String(e)) });
     }
   });
 
@@ -919,13 +953,11 @@ async function startServer() {
 
   app.delete('/api/comments/:id', (req, res) => {
     const commentId = Number(req.params.id);
-    const userId = Number(req.body.userId || req.query.userId);
-
-    console.log(`[API] Attempting to delete comment ${commentId} by user ${userId}`);
+    const userId = Number(req.query.userId || req.body.userId);
 
     try {
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized: No user ID provided' });
+      if (!userId || isNaN(userId)) {
+        return res.status(401).json({ error: 'Unauthorized: No valid user ID provided' });
       }
 
       const requestingUser = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId) as { id: number, role: string } | undefined;
@@ -942,16 +974,32 @@ async function startServer() {
       const isAuthor = Number(comment.author_id) === userId;
 
       if (!isAdmin && !isAuthor) {
-        console.log(`[API] Forbidden: User ${userId} (role: ${requestingUser.role}) tried to delete comment ${commentId} owned by ${comment.author_id}`);
         return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this comment' });
       }
 
       db.prepare('DELETE FROM comments WHERE id = ?').run(commentId);
-      console.log(`[API] Comment ${commentId} deleted successfully`);
       res.json({ success: true });
     } catch (e) {
       console.error('Error deleting comment:', e);
       res.status(500).json({ error: 'Failed to delete comment: ' + (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  app.put('/api/comments/:id', (req, res) => {
+    const commentId = Number(req.params.id);
+    const { content, userId } = req.body;
+
+    try {
+      const comment = db.prepare('SELECT author_id FROM comments WHERE id = ?').get(commentId) as { author_id: number } | undefined;
+      if (!comment || comment.author_id !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      db.prepare('UPDATE comments SET content = ? WHERE id = ?').run(content, commentId);
+      res.json({ success: true });
+    } catch (e) {
+      console.error('Error editing comment:', e);
+      res.status(500).json({ error: 'Gagal mengedit komentar' });
     }
   });
 
@@ -1285,7 +1333,7 @@ async function startServer() {
 
   app.delete('/api/admin/users/:id', (req, res) => {
     const userIdToDelete = Number(req.params.id);
-    const adminId = Number(req.body.adminId || req.query.adminId);
+    const adminId = Number(req.query.adminId || req.body.adminId);
 
     console.log(`[API] Admin ${adminId} attempting to delete user ${userIdToDelete}`);
 
@@ -1313,9 +1361,7 @@ async function startServer() {
         return res.status(404).json({ error: 'User tidak ditemukan' });
       }
 
-      // Use a manual transaction for maximum control
-      db.prepare('BEGIN TRANSACTION').run();
-      try {
+      const deleteTx = db.transaction(() => {
         // 1. Delete votes for this candidate (if they are one)
         const candidate = db.prepare('SELECT id FROM candidates WHERE user_id = ?').get(userIdToDelete) as { id: number } | undefined;
         if (candidate) {
@@ -1343,16 +1389,25 @@ async function startServer() {
         db.prepare('DELETE FROM likes WHERE user_id = ?').run(userIdToDelete);
         db.prepare('DELETE FROM comments WHERE author_id = ?').run(userIdToDelete);
         
+        // 5.5 Delete stories and related data
+        db.prepare('DELETE FROM story_views WHERE user_id = ?').run(userIdToDelete);
+        db.prepare('DELETE FROM story_tags WHERE tagged_user_id = ?').run(userIdToDelete);
+        
+        const userStories = db.prepare('SELECT id FROM stories WHERE user_id = ?').all(userIdToDelete) as { id: number }[];
+        for (const story of userStories) {
+          db.prepare('DELETE FROM story_views WHERE story_id = ?').run(story.id);
+          db.prepare('DELETE FROM story_tags WHERE story_id = ?').run(story.id);
+          db.prepare('DELETE FROM notifications WHERE story_id = ?').run(story.id);
+          db.prepare('DELETE FROM stories WHERE id = ?').run(story.id);
+        }
+        
         // 6. Finally delete the user
         db.prepare('DELETE FROM users WHERE id = ?').run(userIdToDelete);
-        
-        db.prepare('COMMIT').run();
-        console.log(`[API] User ${userIdToDelete} and all related data deleted successfully`);
-        res.json({ success: true });
-      } catch (transactionError) {
-        db.prepare('ROLLBACK').run();
-        throw transactionError;
-      }
+      });
+      
+      deleteTx();
+      console.log(`[API] User ${userIdToDelete} and all related data deleted successfully`);
+      res.json({ success: true });
     } catch (e) {
       console.error('Error deleting user:', e);
       res.status(500).json({ error: 'Gagal menghapus pengguna: ' + (e instanceof Error ? e.message : String(e)) });
@@ -1375,10 +1430,14 @@ async function startServer() {
         if (role === 'candidate') {
           const isCandidate = db.prepare('SELECT 1 FROM candidates WHERE user_id = ?').get(userId);
           if (!isCandidate) {
-            db.prepare('INSERT INTO candidates (user_id, vision, mission) VALUES (?, ?, ?)').run(userId, '', '');
+            db.prepare('INSERT INTO candidates (user_id, vision, mission, innovation_program) VALUES (?, ?, ?, ?)').run(userId, '', '', '');
           }
         } else {
-          db.prepare('DELETE FROM candidates WHERE user_id = ?').run(userId);
+          const candidate = db.prepare('SELECT id FROM candidates WHERE user_id = ?').get(userId) as { id: number } | undefined;
+          if (candidate) {
+            db.prepare('DELETE FROM votes WHERE candidate_id = ?').run(candidate.id);
+            db.prepare('DELETE FROM candidates WHERE user_id = ?').run(userId);
+          }
         }
       }
 
@@ -1410,11 +1469,15 @@ async function startServer() {
         // Check if already candidate
         const existing = db.prepare('SELECT 1 FROM candidates WHERE user_id = ?').get(userId);
         if (!existing) {
-          db.prepare('INSERT INTO candidates (user_id, vision, mission) VALUES (?, ?, ?)').run(userId, '', '');
+          db.prepare('INSERT INTO candidates (user_id, vision, mission, innovation_program) VALUES (?, ?, ?, ?)').run(userId, '', '', '');
         }
       } else {
         // If demoting from candidate, remove from candidates table
-        db.prepare('DELETE FROM candidates WHERE user_id = ?').run(userId);
+        const candidate = db.prepare('SELECT id FROM candidates WHERE user_id = ?').get(userId) as { id: number } | undefined;
+        if (candidate) {
+          db.prepare('DELETE FROM votes WHERE candidate_id = ?').run(candidate.id);
+          db.prepare('DELETE FROM candidates WHERE user_id = ?').run(userId);
+        }
       }
       
       db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
@@ -1424,9 +1487,51 @@ async function startServer() {
     }
   });
 
+  app.post('/api/admin/users', (req, res) => {
+    const { name, username, password, role, bio, is_approved, is_verified } = req.body;
+    
+    if (!name || !username || !password) {
+      return res.status(400).json({ error: 'Name, username, and password are required' });
+    }
+
+    try {
+      // Check if username exists
+      const existing = db.prepare('SELECT 1 FROM users WHERE username = ?').get(username);
+      if (existing) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+
+      const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+      const result = db.prepare(`
+        INSERT INTO users (name, username, avatar, bio, role, password, is_approved, is_verified) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        name, 
+        username, 
+        avatar, 
+        bio || '', 
+        role || 'voter', 
+        password, 
+        is_approved !== undefined ? is_approved : 1,
+        is_verified !== undefined ? is_verified : 0
+      );
+      
+      const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+      
+      if (role === 'candidate') {
+        db.prepare('INSERT INTO candidates (user_id, vision, mission, innovation_program) VALUES (?, ?, ?, ?)').run(newUser.id, '', '', '');
+      }
+
+      res.status(201).json(newUser);
+    } catch (e) {
+      console.error('Admin user creation error:', e);
+      res.status(500).json({ error: 'Failed to create user' });
+    }
+  });
+
   app.delete('/api/admin/posts/:id', (req, res) => {
     const postId = Number(req.params.id);
-    const adminId = Number(req.body.adminId || req.query.adminId);
+    const adminId = Number(req.query.adminId || req.body.adminId);
 
     console.log(`[API] Admin ${adminId} attempting to delete post ${postId}`);
 
@@ -1440,21 +1545,18 @@ async function startServer() {
         return res.status(403).json({ error: 'Forbidden: Admin access required' });
       }
 
-      db.prepare('BEGIN TRANSACTION').run();
-      try {
+      const deleteTx = db.transaction(() => {
         db.prepare('DELETE FROM likes WHERE post_id = ?').run(postId);
         db.prepare('DELETE FROM comments WHERE post_id = ?').run(postId);
         db.prepare('DELETE FROM notifications WHERE post_id = ?').run(postId);
         db.prepare('DELETE FROM posts WHERE id = ?').run(postId);
-        db.prepare('COMMIT').run();
-        
-        broadcast({ type: 'post:deleted', postId });
-        console.log(`[API] Post ${postId} deleted successfully by admin`);
-        res.json({ success: true });
-      } catch (transactionError) {
-        db.prepare('ROLLBACK').run();
-        throw transactionError;
-      }
+      });
+      
+      deleteTx();
+      
+      broadcast({ type: 'post:deleted', postId });
+      console.log(`[API] Post ${postId} deleted successfully by admin`);
+      res.json({ success: true });
     } catch (e) {
       console.error('Error deleting post by admin:', e);
       res.status(500).json({ error: 'Gagal menghapus postingan: ' + (e instanceof Error ? e.message : String(e)) });
@@ -1523,6 +1625,7 @@ async function startServer() {
 
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log('SERVER RESTARTED WITH NEW CODE');
   });
 }
 

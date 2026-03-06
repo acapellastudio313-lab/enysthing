@@ -1,9 +1,26 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, MouseEvent } from 'react';
 import { User, Post, Candidate, ElectionStatus } from '../types';
-import { Trash2, Shield, UserCheck, Users, FileText, BarChart2, AlertTriangle, Edit3, CheckCircle, X, Trophy, Clock, RefreshCw, RotateCcw, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { Trash2, Shield, UserCheck, Users, FileText, BarChart2, AlertTriangle, Edit3, CheckCircle, X, Trophy, Clock, RefreshCw, RotateCcw, Loader2, UserPlus } from 'lucide-react';
+import { formatDateWIB } from '../utils';
 import { toast } from 'sonner';
+import { 
+  getStats, 
+  getAllUsers, 
+  listenToPosts, 
+  getCandidates, 
+  getLeaderboard, 
+  listenToSettings, 
+  updateSetting, 
+  deleteUser, 
+  deletePost, 
+  addCandidate, 
+  removeCandidate, 
+  resetVotes as resetVotesDb, 
+  resetAllData,
+  updateUser,
+  updateCandidate,
+  createUser
+} from '../lib/db';
 
 export default function AdminDashboard({ user }: { user: User }) {
   const [stats, setStats] = useState({ users: 0, posts: 0, votes: 0, candidates: 0 });
@@ -41,51 +58,74 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1 });
   
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [addUserForm, setAddUserForm] = useState({ name: '', username: '', password: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1 });
+
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null | 'new'>(null);
   const [candidateForm, setCandidateForm] = useState({ name: '', username: '', avatar: '', vision: '', mission: '', innovation_program: '', image_url: '' });
-  const [selectedUserId, setSelectedUserId] = useState<number | ''>('');
+  const [selectedUserId, setSelectedUserId] = useState<string | ''>('');
 
-  const [deleteCandidateId, setDeleteCandidateId] = useState<number | null>(null);
+  const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [resetConfirmationText, setResetConfirmationText] = useState('');
+  
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean, userId: string | null, userName: string }>({
+    isOpen: false,
+    userId: null,
+    userName: ''
+  });
 
   useEffect(() => {
-    fetchStats();
-    fetchUsers();
-    fetchPosts();
-    fetchCandidates();
-    fetchLeaderboard();
-    fetchElectionStatus();
-    fetchElectionEndDate();
-    fetchLeaderboardSettings();
-    fetchExploreSettings();
-    fetchCandidatePageSettings();
-    fetchGeneralSettings();
-
-    // WebSocket for real-time updates
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'election:status_changed') {
-        setElectionStatus(data.status);
-      } else if (data.type === 'settings:updated' && data.section === 'end_date') {
-        if (data.endDate) {
-          // Format the date for the datetime-local input
-          const date = new Date(data.endDate);
-          date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-          setElectionEndDate(date.toISOString().slice(0, 16));
-        } else {
-          setElectionEndDate('');
-        }
-      } else if (data.type === 'vote:cast') {
-        fetchStats();
-        fetchLeaderboard();
-      }
+    const fetchData = async () => {
+      const s = await getStats();
+      setStats(s);
+      
+      const u = await getAllUsers();
+      setUsers(u);
+      
+      const c = await getCandidates();
+      setCandidates(c);
+      
+      const l = await getLeaderboard();
+      setLeaderboard(l);
     };
 
-    return () => ws.close();
+    fetchData();
+
+    const unsubscribePosts = listenToPosts((p) => setPosts(p));
+    const unsubscribeSettings = listenToSettings((settings) => {
+      const status = settings.election_status as ElectionStatus;
+      if (status) setElectionStatus(status);
+
+      const endDate = settings.election_end_date;
+      if (endDate) {
+        const date = new Date(endDate);
+        date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+        setElectionEndDate(date.toISOString().slice(0, 16));
+      }
+
+      setLeaderboardTitle(settings.leaderboard_title || '');
+      setLeaderboardDescription(settings.leaderboard_description || '');
+      setExploreTitle(settings.explore_title || '');
+      setExploreSchedule(settings.explore_schedule || '');
+      setExploreRequirement(settings.explore_requirement || '');
+      setExploreHelp(settings.explore_help || '');
+      setCandidatePageTitle(settings.candidate_page_title || '');
+      setCandidatePageDescription(settings.candidate_page_description || '');
+      setAppName(settings.app_name || '');
+      setAppSubtitle(settings.app_subtitle || '');
+      setAppLogo(settings.app_logo || '');
+      setAppIcon(settings.app_icon || '');
+      setCandidateLabel(settings.candidate_label || '');
+      setCandidateDescLabel(settings.candidate_desc_label || '');
+      
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribePosts();
+      unsubscribeSettings();
+    };
   }, []);
 
   useEffect(() => {
@@ -111,102 +151,13 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [refreshingStatus, setRefreshingStatus] = useState(false);
   const [resettingVotes, setResettingVotes] = useState(false);
 
-  const fetchElectionStatus = async () => {
-    setRefreshingStatus(true);
-    try {
-      const res = await fetch(`/api/settings/status?t=${Date.now()}`);
-      const data = await res.json();
-      console.log('Fetched election status:', data.status);
-      setElectionStatus(data.status);
-    } catch (err) {
-      console.error('Failed to fetch election status', err);
-    } finally {
-      setRefreshingStatus(false);
-    }
-  };
-
-  const fetchElectionEndDate = async () => {
-    try {
-      const res = await fetch('/api/settings/end-date');
-      const data = await res.json();
-      if (data.endDate) {
-        // Format for datetime-local input: YYYY-MM-DDTHH:mm
-        const date = new Date(data.endDate);
-        // Adjust to local time for input
-        const offset = date.getTimezoneOffset() * 60000;
-        const localDate = new Date(date.getTime() - offset);
-        const formatted = localDate.toISOString().slice(0, 16);
-        setElectionEndDate(formatted);
-      }
-    } catch (err) {
-      console.error('Failed to fetch election end date', err);
-    }
-  };
-
-  const fetchLeaderboardSettings = async () => {
-    try {
-      const res = await fetch('/api/settings/leaderboard');
-      const data = await res.json();
-      setLeaderboardTitle(data.title);
-      setLeaderboardDescription(data.description);
-    } catch (err) {
-      console.error('Failed to fetch leaderboard settings', err);
-    }
-  };
-
-  const fetchExploreSettings = async () => {
-    try {
-      const res = await fetch('/api/settings/explore');
-      const data = await res.json();
-      setExploreTitle(data.title);
-      setExploreSchedule(data.schedule);
-      setExploreRequirement(data.requirement);
-      setExploreHelp(data.help);
-    } catch (err) {
-      console.error('Failed to fetch explore settings', err);
-    }
-  };
-
-  const fetchCandidatePageSettings = async () => {
-    try {
-      const res = await fetch('/api/settings/candidate_page');
-      const data = await res.json();
-      setCandidatePageTitle(data.title);
-      setCandidatePageDescription(data.description);
-    } catch (err) {
-      console.error('Failed to fetch candidate page settings', err);
-    }
-  };
-
-  const fetchGeneralSettings = async () => {
-    try {
-      const res = await fetch('/api/settings/general');
-      const data = await res.json();
-      setAppName(data.appName);
-      setAppSubtitle(data.appSubtitle);
-      setAppLogo(data.appLogoUrl);
-      setAppIcon(data.appIcon);
-      setCandidateLabel(data.candidateLabel);
-      setCandidateDescLabel(data.candidateDescLabel);
-    } catch (err) {
-      console.error('Failed to fetch general settings', err);
-    }
-  };
-
   const updateLeaderboardSettings = async () => {
     setUpdatingLeaderboard(true);
     try {
-      const res = await fetch('/api/admin/settings/leaderboard', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: leaderboardTitle, description: leaderboardDescription })
-      });
-      if (res.ok) {
-        setStatusMessage({ type: 'success', text: 'Pengaturan klasemen berhasil diperbarui' });
-        setTimeout(() => setStatusMessage(null), 3000);
-      } else {
-        throw new Error('Gagal memperbarui pengaturan klasemen');
-      }
+      await updateSetting('leaderboard_title', leaderboardTitle);
+      await updateSetting('leaderboard_description', leaderboardDescription);
+      setStatusMessage({ type: 'success', text: 'Pengaturan klasemen berhasil diperbarui' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error(err);
       setStatusMessage({ type: 'error', text: err.message });
@@ -218,22 +169,12 @@ export default function AdminDashboard({ user }: { user: User }) {
   const updateExploreSettings = async () => {
     setUpdatingExplore(true);
     try {
-      const res = await fetch('/api/admin/settings/explore', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          title: exploreTitle, 
-          schedule: exploreSchedule, 
-          requirement: exploreRequirement, 
-          help: exploreHelp 
-        })
-      });
-      if (res.ok) {
-        setStatusMessage({ type: 'success', text: 'Pengaturan informasi pemilihan berhasil diperbarui' });
-        setTimeout(() => setStatusMessage(null), 3000);
-      } else {
-        throw new Error('Gagal memperbarui pengaturan informasi pemilihan');
-      }
+      await updateSetting('explore_title', exploreTitle);
+      await updateSetting('explore_schedule', exploreSchedule);
+      await updateSetting('explore_requirement', exploreRequirement);
+      await updateSetting('explore_help', exploreHelp);
+      setStatusMessage({ type: 'success', text: 'Pengaturan informasi pemilihan berhasil diperbarui' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error(err);
       setStatusMessage({ type: 'error', text: err.message });
@@ -245,17 +186,10 @@ export default function AdminDashboard({ user }: { user: User }) {
   const updateCandidatePageSettings = async () => {
     setUpdatingCandidatePage(true);
     try {
-      const res = await fetch('/api/admin/settings/candidate_page', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: candidatePageTitle, description: candidatePageDescription })
-      });
-      if (res.ok) {
-        setStatusMessage({ type: 'success', text: 'Pengaturan halaman kandidat berhasil diperbarui' });
-        setTimeout(() => setStatusMessage(null), 3000);
-      } else {
-        throw new Error('Gagal memperbarui pengaturan halaman kandidat');
-      }
+      await updateSetting('candidate_page_title', candidatePageTitle);
+      await updateSetting('candidate_page_description', candidatePageDescription);
+      setStatusMessage({ type: 'success', text: 'Pengaturan halaman kandidat berhasil diperbarui' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error(err);
       setStatusMessage({ type: 'error', text: err.message });
@@ -267,24 +201,14 @@ export default function AdminDashboard({ user }: { user: User }) {
   const updateGeneralSettings = async () => {
     setUpdatingGeneral(true);
     try {
-      const res = await fetch('/api/admin/settings/general', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          appName, 
-          appSubtitle,
-          appLogoUrl: appLogo,
-          appIcon, 
-          candidateLabel, 
-          candidateDescLabel 
-        })
-      });
-      if (res.ok) {
-        setStatusMessage({ type: 'success', text: 'Pengaturan umum berhasil diperbarui' });
-        setTimeout(() => setStatusMessage(null), 3000);
-      } else {
-        throw new Error('Gagal memperbarui pengaturan umum');
-      }
+      await updateSetting('app_name', appName);
+      await updateSetting('app_subtitle', appSubtitle);
+      await updateSetting('app_logo', appLogo);
+      await updateSetting('app_icon', appIcon);
+      await updateSetting('candidate_label', candidateLabel);
+      await updateSetting('candidate_desc_label', candidateDescLabel);
+      setStatusMessage({ type: 'success', text: 'Pengaturan umum berhasil diperbarui' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error(err);
       setStatusMessage({ type: 'error', text: err.message });
@@ -303,18 +227,9 @@ export default function AdminDashboard({ user }: { user: User }) {
 
     setUpdatingEndDate(true);
     try {
-      const res = await fetch('/api/admin/settings/end-date', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endDate: new Date(electionEndDate).toISOString() })
-      });
-      if (res.ok) {
-        setStatusMessage({ type: 'success', text: 'Tanggal berakhir pemilihan berhasil diperbarui' });
-        setTimeout(() => setStatusMessage(null), 3000);
-      } else {
-        const data = await res.json();
-        throw new Error(data.error || 'Gagal memperbarui tanggal');
-      }
+      await updateSetting('election_end_date', new Date(electionEndDate).toISOString());
+      setStatusMessage({ type: 'success', text: 'Tanggal berakhir pemilihan berhasil diperbarui' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error(err);
       setStatusMessage({ type: 'error', text: err.message || 'Gagal memperbarui tanggal' });
@@ -329,14 +244,12 @@ export default function AdminDashboard({ user }: { user: User }) {
     setResettingVotes(true);
     setStatusMessage(null);
     try {
-      const res = await fetch('/api/admin/votes', { method: 'DELETE' });
-      if (res.ok) {
-        setStatusMessage({ type: 'success', text: 'Semua suara berhasil dihapus' });
-        fetchStats(); // Refresh stats
-        fetchLeaderboard(); // Refresh leaderboard
-      } else {
-        throw new Error('Gagal menghapus suara');
-      }
+      await resetVotesDb();
+      setStatusMessage({ type: 'success', text: 'Semua suara berhasil dihapus' });
+      const s = await getStats();
+      setStats(s);
+      const l = await getLeaderboard();
+      setLeaderboard(l);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message || 'Gagal menghapus suara' });
     } finally {
@@ -356,25 +269,14 @@ export default function AdminDashboard({ user }: { user: User }) {
     setUpdatingStatus(true);
     
     try {
-      const res = await fetch('/api/admin/settings/status', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        setElectionStatus(data.status); // Use server response
-        setStatusMessage({ type: 'success', text: 'Status pemilihan berhasil diperbarui' });
-        setTimeout(() => setStatusMessage(null), 3000);
-      } else {
-        throw new Error(data.error || 'Failed to update');
-      }
+      await updateSetting('election_status', status);
+      setElectionStatus(status);
+      setStatusMessage({ type: 'success', text: 'Status pemilihan berhasil diperbarui' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error('Failed to update election status', err);
       setElectionStatus(previousStatus); // Revert on error
-      setStatusMessage({ type: 'error', text: err.message === 'Failed to fetch' ? 'Gagal terhubung ke server. Periksa koneksi Anda.' : (err.message || 'Gagal memperbarui status') });
+      setStatusMessage({ type: 'error', text: err.message || 'Gagal memperbarui status' });
     } finally {
       setUpdatingStatus(false);
     }
@@ -382,81 +284,61 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const fetchCandidates = async () => {
     try {
-      const res = await fetch(`/api/candidates?t=${Date.now()}`);
-      const data = await res.json();
+      const data = await getCandidates();
       setCandidates(data);
     } catch (err: any) {
-      if (err.message !== 'Failed to fetch') {
-        console.error('Failed to fetch candidates', err);
-      }
-    }
-  };
-
-  const fetchLeaderboard = async () => {
-    try {
-      const res = await fetch(`/api/leaderboard?t=${Date.now()}`);
-      const data = await res.json();
-      setLeaderboard(data);
-    } catch (err: any) {
-      if (err.message !== 'Failed to fetch') {
-        console.error('Failed to fetch leaderboard', err);
-      }
+      console.error('Failed to fetch candidates', err);
     }
   };
 
   const fetchStats = async () => {
     try {
-      const res = await fetch(`/api/admin/stats?t=${Date.now()}`);
-      const data = await res.json();
+      const data = await getStats();
       setStats(data);
     } catch (err: any) {
-      if (err.message !== 'Failed to fetch') {
-        console.error('Failed to fetch stats', err);
-      }
+      console.error('Failed to fetch stats', err);
     }
   };
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`/api/users?t=${Date.now()}`);
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const data = await res.json();
+      const data = await getAllUsers();
       setUsers(data);
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      // Don't show alert for background fetches, just log
     }
   };
 
-  const fetchPosts = async () => {
-    try {
-      const res = await fetch(`/api/posts?t=${Date.now()}`);
-      if (!res.ok) throw new Error('Failed to fetch posts');
-      const data = await res.json();
-      setPosts(data);
-    } catch (err: any) {
-      console.error('Error fetching posts:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteUser = async (userId: number) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus pengguna ini? Semua data terkait akan dihapus permanen.')) return;
+  const handleDeleteUser = (userId: string) => {
+    const userToDelete = users.find(u => u.id === userId);
+    if (!userToDelete) return;
     
+    setDeleteConfirmation({
+      isOpen: true,
+      userId: userId,
+      userName: userToDelete.name
+    });
+  };
+
+  const processDeleteUser = async () => {
+    const userId = deleteConfirmation.userId;
+    if (!userId) return;
+
     try {
-      const res = await fetch(`/api/admin/users/${userId}?adminId=${user.id}`, { 
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminId: user.id })
-      });
-      if (res.ok) {
-        setUsers(users.filter(u => u.id !== userId));
-        fetchStats();
-        toast.success('Pengguna berhasil dihapus');
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Gagal menghapus pengguna');
+      await deleteUser(userId);
+      setUsers(users.filter(u => u.id !== userId));
+      const s = await getStats();
+      setStats(s);
+      const c = await getCandidates();
+      setCandidates(c);
+      const l = await getLeaderboard();
+      setLeaderboard(l);
+      toast.success('Pengguna berhasil dihapus');
+      
+      // Close modals
+      setDeleteConfirmation({ isOpen: false, userId: null, userName: '' });
+      if (editingUser?.id === userId) {
+        setEditingUser(null);
       }
     } catch (err) {
       console.error('Failed to delete user', err);
@@ -464,20 +346,21 @@ export default function AdminDashboard({ user }: { user: User }) {
     }
   };
 
-  const handleUpdateRole = async (userId: number, newRole: string) => {
+  const handleDeleteUserClick = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!editingUser) return;
+    
+    handleDeleteUser(editingUser.id);
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
-      const res = await fetch(`/api/admin/users/${userId}/role`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole })
-      });
-      
-      if (res.ok) {
-        setUsers(users.map(u => u.id === userId ? { ...u, role: newRole as any } : u));
-        fetchStats();
-      } else {
-        alert('Gagal mengubah role pengguna');
-      }
+      await updateUser(userId, { role: newRole as any });
+      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole as any } : u));
+      const s = await getStats();
+      setStats(s);
     } catch (err) {
       console.error('Failed to update role', err);
     }
@@ -500,49 +383,50 @@ export default function AdminDashboard({ user }: { user: User }) {
     if (!editingUser) return;
 
     try {
-      const res = await fetch(`/api/admin/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
-      });
-      
-      if (res.ok) {
-        const updated = await res.json();
-        setUsers(users.map(u => u.id === editingUser.id ? updated : u));
-        setEditingUser(null);
-        fetchStats();
-      } else {
-        alert('Gagal memperbarui pengguna');
-      }
+      await updateUser(editingUser.id, editForm);
+      setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...editForm } : u));
+      setEditingUser(null);
+      const s = await getStats();
+      setStats(s);
+      toast.success('Pengguna berhasil diperbarui');
     } catch (err) {
       console.error('Failed to update user', err);
+      toast.error('Gagal memperbarui pengguna');
     }
   };
 
-  const handleDeletePost = async (postId: number) => {
+  const handleAddUser = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const newUser = await createUser(addUserForm);
+      setUsers([newUser as User, ...users]);
+      setIsAddingUser(false);
+      setAddUserForm({ name: '', username: '', password: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1 });
+      const s = await getStats();
+      setStats(s);
+      toast.success('Pengguna baru berhasil ditambahkan');
+    } catch (err) {
+      console.error('Failed to add user', err);
+      toast.error('Gagal menambahkan pengguna');
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
     if (!confirm('Apakah Anda yakin ingin menghapus postingan ini?')) return;
 
     try {
-      const res = await fetch(`/api/admin/posts/${postId}?adminId=${user.id}`, { 
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminId: user.id })
-      });
-      if (res.ok) {
-        setPosts(posts.filter(p => p.id !== postId));
-        fetchStats();
-        toast.success('Postingan berhasil dihapus');
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Gagal menghapus postingan');
-      }
+      await deletePost(postId);
+      setPosts(posts.filter(p => p.id !== postId));
+      const s = await getStats();
+      setStats(s);
+      toast.success('Postingan berhasil dihapus');
     } catch (err) {
       console.error('Failed to delete post', err);
       toast.error('Gagal menghapus postingan');
     }
   };
 
-  const handleDeleteCandidate = async (candidateId: number) => {
+  const handleDeleteCandidate = async (candidateId: string) => {
     setDeleteCandidateId(candidateId);
   };
 
@@ -550,21 +434,18 @@ export default function AdminDashboard({ user }: { user: User }) {
     if (!deleteCandidateId) return;
 
     try {
-      const res = await fetch(`/api/candidates/${deleteCandidateId}?adminId=${user.id}`, { 
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminId: user.id })
-      });
-      if (res.ok) {
+      const candidate = candidates.find(c => c.id === deleteCandidateId);
+      if (candidate) {
+        await removeCandidate(deleteCandidateId, candidate.user_id);
         setCandidates(candidates.filter(c => c.id !== deleteCandidateId));
-        fetchStats();
-        fetchUsers(); // Refresh users to update roles
-        fetchLeaderboard();
+        const s = await getStats();
+        setStats(s);
+        const u = await getAllUsers();
+        setUsers(u);
+        const l = await getLeaderboard();
+        setLeaderboard(l);
         setDeleteCandidateId(null);
         toast.success('Kandidat berhasil dihapus');
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Gagal menghapus kandidat');
       }
     } catch (err) {
       console.error('Failed to delete candidate', err);
@@ -612,37 +493,21 @@ export default function AdminDashboard({ user }: { user: User }) {
           return;
         }
         
-        const res = await fetch('/api/admin/candidates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: Number(selectedUserId) })
+        await addCandidate(selectedUserId, {
+          vision: '',
+          mission: '',
+          innovation_program: '',
+          image_url: ''
         });
-
-        if (res.ok) {
-          fetchCandidates();
-          fetchUsers();
-          setEditingCandidate(null);
-          fetchStats();
-        } else {
-          const data = await res.json();
-          alert(data.error || 'Gagal menambahkan kandidat');
-        }
+        fetchCandidates();
+        fetchUsers();
+        setEditingCandidate(null);
+        fetchStats();
       } else {
-        const url = `/api/admin/candidates/${(editingCandidate as Candidate).id}`;
-        const res = await fetch(url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(candidateForm)
-        });
-        
-        if (res.ok) {
-          fetchCandidates();
-          fetchUsers();
-          setEditingCandidate(null);
-        } else {
-          const data = await res.json();
-          alert(data.error || 'Gagal menyimpan kandidat');
-        }
+        await updateCandidate((editingCandidate as Candidate).id, candidateForm);
+        fetchCandidates();
+        fetchUsers();
+        setEditingCandidate(null);
       }
     } catch (err) {
       console.error('Failed to save candidate', err);
@@ -657,20 +522,13 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const confirmResetVotes = async () => {
     try {
-      const res = await fetch(`/api/admin/votes?adminId=${user.id}`, { 
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminId: user.id })
-      });
-      if (res.ok) {
-        fetchStats();
-        fetchLeaderboard();
-        setShowResetConfirmation(false);
-        toast.success('Data klasemen berhasil direset.');
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Gagal mereset data klasemen');
-      }
+      await resetVotes();
+      const s = await getStats();
+      setStats(s);
+      const l = await getLeaderboard();
+      setLeaderboard(l);
+      setShowResetConfirmation(false);
+      toast.success('Data klasemen berhasil direset.');
     } catch (err) {
       console.error('Failed to reset votes', err);
       toast.error('Gagal mereset data klasemen');
@@ -713,7 +571,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           </div>
           <div className="flex gap-2">
             <button 
-              onClick={() => fetchElectionStatus()}
+              onClick={() => {}}
               disabled={refreshingStatus}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
               title="Refresh Status"
@@ -1147,6 +1005,15 @@ export default function AdminDashboard({ user }: { user: User }) {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {activeTab === 'users' ? (
           <div className="overflow-x-auto">
+            <div className="p-4 bg-slate-50 flex justify-between items-center border-b border-slate-200">
+              <h3 className="font-bold text-slate-900">Daftar Pengguna</h3>
+              <button
+                onClick={() => setIsAddingUser(true)}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm flex items-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" /> Tambah Pengguna
+              </button>
+            </div>
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                 <tr>
@@ -1216,7 +1083,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                       <span className="font-bold text-slate-900 text-sm">{post.name}</span>
                       <span className="text-slate-500 text-xs ml-2">@{post.username}</span>
                       <span className="text-slate-400 text-xs mx-1">•</span>
-                      <span className="text-slate-400 text-xs">{format(new Date(post.created_at), 'd MMM yyyy', { locale: id })}</span>
+                      <span className="text-slate-400 text-xs">{formatDateWIB(post.created_at)}</span>
                     </div>
                     <button
                       onClick={() => handleDeletePost(post.id)}
@@ -1362,6 +1229,111 @@ export default function AdminDashboard({ user }: { user: User }) {
           </div>
         )}
       </div>
+      {/* Add User Modal */}
+      {isAddingUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+              <h3 className="font-bold text-slate-900">Tambah Pengguna Baru</h3>
+              <button onClick={() => setIsAddingUser(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddUser} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={addUserForm.name}
+                  onChange={e => setAddUserForm({...addUserForm, name: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={addUserForm.username}
+                  onChange={e => setAddUserForm({...addUserForm, username: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={addUserForm.password}
+                  onChange={e => setAddUserForm({...addUserForm, password: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Bio</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={addUserForm.bio}
+                  onChange={e => setAddUserForm({...addUserForm, bio: e.target.value})}
+                  rows={2}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                  <select
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={addUserForm.role}
+                    onChange={e => setAddUserForm({...addUserForm, role: e.target.value as any})}
+                  >
+                    <option value="voter">Voter</option>
+                    <option value="candidate">Kandidat</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status Verifikasi</label>
+                  <select
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={addUserForm.is_verified}
+                    onChange={e => setAddUserForm({...addUserForm, is_verified: Number(e.target.value)})}
+                  >
+                    <option value={0}>Belum Terverifikasi</option>
+                    <option value={1}>Terverifikasi</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_approved_add"
+                  checked={addUserForm.is_approved === 1}
+                  onChange={e => setAddUserForm({...addUserForm, is_approved: e.target.checked ? 1 : 0})}
+                  className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-slate-300 rounded"
+                />
+                <label htmlFor="is_approved_add" className="text-sm font-medium text-slate-700">Langsung Setujui Akun</label>
+              </div>
+              <div className="pt-4 flex gap-3 sticky bottom-0 bg-white pb-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingUser(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors"
+                >
+                  Tambah Pengguna
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Edit User Modal */}
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1454,22 +1426,65 @@ export default function AdminDashboard({ user }: { user: User }) {
                   </select>
                 </div>
               </div>
-              <div className="pt-4 flex gap-3 sticky bottom-0 bg-white pb-2">
+              <div className="pt-4 flex flex-col gap-3 sticky bottom-0 bg-white pb-2">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingUser(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors"
+                  >
+                    Simpan Perubahan
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                  onClick={handleDeleteUserClick}
+                  className="w-full py-2.5 rounded-xl bg-red-50 text-red-600 border border-red-200 font-bold hover:bg-red-100 transition-colors"
                 >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors"
-                >
-                  Simpan Perubahan
+                  Hapus Pengguna
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {deleteConfirmation.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <div className="p-3 bg-red-50 rounded-full">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold">Hapus Pengguna?</h3>
+            </div>
+            
+            <p className="text-slate-600 mb-6">
+              Apakah Anda yakin ingin menghapus pengguna <span className="font-bold text-slate-900">{deleteConfirmation.userName}</span>? 
+              Tindakan ini akan menghapus semua data terkait (postingan, suara, dll) secara permanen dan tidak dapat dibatalkan.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmation({ isOpen: false, userId: null, userName: '' })}
+                className="flex-1 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={processDeleteUser}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-colors"
+              >
+                Ya, Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}

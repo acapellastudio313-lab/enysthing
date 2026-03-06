@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { User, Message, Conversation } from '../types';
 import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus } from 'lucide-react';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB } from '../utils';
 import { useLocation } from 'react-router-dom';
+import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead } from '../lib/db';
 
 export default function Messages({ user }: { user: User }) {
   const location = useLocation();
@@ -19,91 +19,54 @@ export default function Messages({ user }: { user: User }) {
 
   useEffect(() => {
     const init = async () => {
-      const currentConvs = await fetchConversations();
-      await fetchAllUsers();
+      const users = await getAllUsers();
+      setAllUsers(users.filter(u => u.id !== user.id));
       
-      // Handle startWith from navigation state
-      const state = location.state as { startWith?: User };
-      if (state?.startWith) {
-        const existing = currentConvs.find((c: Conversation) => c.id === state.startWith?.id);
-        if (existing) {
-          setSelectedConversation(existing);
-        } else {
-          // Create a temporary conversation object
-          const tempConv: Conversation = {
-            id: state.startWith.id,
-            name: state.startWith.name,
-            username: state.startWith.username,
-            avatar: state.startWith.avatar,
-            last_message: '',
-            last_message_time: new Date().toISOString(),
-            unread_count: 0
-          };
-          setSelectedConversation(tempConv);
-          setConversations(prev => {
-            if (prev.find(p => p.id === tempConv.id)) return prev;
-            return [tempConv, ...prev];
-          });
+      const unsubscribeConvs = listenToConversations(user.id, (convs) => {
+        setConversations(convs);
+        setLoading(false);
+
+        // Handle startWith from navigation state
+        const state = location.state as { startWith?: User };
+        if (state?.startWith) {
+          const existing = convs.find(c => c.id === state.startWith?.id);
+          if (existing) {
+            setSelectedConversation(existing);
+          } else {
+            // Create a temporary conversation object
+            const tempConv: Conversation = {
+              id: state.startWith.id,
+              name: state.startWith.name,
+              username: state.startWith.username,
+              avatar: state.startWith.avatar,
+              last_message: '',
+              last_message_time: new Date().toISOString(),
+              unread_count: 0
+            };
+            setSelectedConversation(tempConv);
+          }
         }
-      }
+      });
+
+      return () => unsubscribeConvs();
     };
     
     init();
-    const interval = setInterval(fetchConversations, 10000);
-    return () => clearInterval(interval);
   }, [user.id, location.state]);
 
   useEffect(() => {
     if (selectedConversation) {
-      fetchMessages(selectedConversation.id);
-      const interval = setInterval(() => fetchMessages(selectedConversation.id), 3000);
-      return () => clearInterval(interval);
+      const unsubscribeMessages = listenToMessages(user.id, selectedConversation.id, (msgs) => {
+        setMessages(msgs);
+        markAsRead(user.id, selectedConversation.id);
+      });
+      return () => unsubscribeMessages();
     }
   }, [selectedConversation, user.id]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const fetchConversations = async () => {
-    try {
-      const res = await fetch(`/api/messages/conversations/${user.id}`);
-      const data = await res.json();
-      setConversations(data);
-      setLoading(false);
-      return data;
-    } catch (err: any) {
-      if (err.message !== 'Failed to fetch') {
-        console.error('Failed to fetch conversations', err);
-      }
-      return [];
-    }
-  };
-
-  const fetchAllUsers = async () => {
-    try {
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      // Filter out current user
-      setAllUsers(data.filter((u: User) => u.id !== user.id));
-    } catch (err: any) {
-      if (err.message !== 'Failed to fetch') {
-        console.error('Failed to fetch users', err);
-      }
-    }
-  };
-
-  const fetchMessages = async (otherUserId: number) => {
-    try {
-      const res = await fetch(`/api/messages/${user.id}/${otherUserId}`);
-      const data = await res.json();
-      setMessages(data);
-    } catch (err: any) {
-      if (err.message !== 'Failed to fetch') {
-        console.error('Failed to fetch messages', err);
-      }
-    }
-  };
 
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
@@ -113,18 +76,7 @@ export default function Messages({ user }: { user: User }) {
     setNewMessage('');
 
     try {
-      const res = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender_id: user.id,
-          receiver_id: selectedConversation.id,
-          content
-        }),
-      });
-      const data = await res.json();
-      setMessages(prev => [...prev, data]);
-      fetchConversations();
+      await sendMessage(user.id, selectedConversation.id, content);
     } catch (err) {
       console.error('Failed to send message', err);
     }
@@ -237,7 +189,7 @@ export default function Messages({ user }: { user: User }) {
                   <div className="flex justify-between items-baseline mb-0.5">
                     <h3 className="font-bold text-slate-900 truncate text-sm">{conv.name}</h3>
                     <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                      {format(new Date(conv.last_message_time), 'HH:mm', { locale: id })}
+                      {formatDateWIB(conv.last_message_time)}
                     </span>
                   </div>
                   <p className={`text-xs truncate ${conv.unread_count > 0 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
@@ -285,14 +237,14 @@ export default function Messages({ user }: { user: User }) {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, idx) => {
                 const isMe = msg.sender_id === user.id;
-                const showDate = idx === 0 || format(new Date(messages[idx-1].created_at), 'yyyy-MM-dd') !== format(new Date(msg.created_at), 'yyyy-MM-dd');
+                const showDate = idx === 0 || formatDateOnlyWIB(messages[idx-1].created_at) !== formatDateOnlyWIB(msg.created_at);
 
                 return (
                   <div key={msg.id} className="space-y-2">
                     {showDate && (
                       <div className="flex justify-center my-4">
                         <span className="text-[10px] font-bold text-slate-400 bg-slate-200/50 px-2 py-1 rounded-full uppercase tracking-wider">
-                          {format(new Date(msg.created_at), 'd MMMM yyyy', { locale: id })}
+                          {formatDateOnlyWIB(msg.created_at)}
                         </span>
                       </div>
                     )}
@@ -304,7 +256,7 @@ export default function Messages({ user }: { user: User }) {
                       }`}>
                         <p className="leading-relaxed">{msg.content}</p>
                         <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-emerald-100' : 'text-slate-400'}`}>
-                          {format(new Date(msg.created_at), 'HH:mm')}
+                          {formatTimeWIB(msg.created_at)}
                         </p>
                       </div>
                     </div>

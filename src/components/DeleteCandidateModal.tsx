@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Candidate } from '../types';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { removeCandidate } from '../lib/db';
 
 interface DeleteCandidateModalProps {
   candidate: Candidate;
@@ -18,14 +19,7 @@ export default function DeleteCandidateModal({ candidate, onClose, onConfirm }: 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/candidates/${candidate.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Failed to delete candidate');
-      }
+      await removeCandidate(candidate.id, candidate.user_id);
 
       toast.success('Kandidat berhasil dihapus');
       await onConfirm();

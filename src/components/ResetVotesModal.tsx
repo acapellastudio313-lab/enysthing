@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { X, Loader2, RotateCcw } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { resetVotes } from '../lib/db';
 
 interface ResetVotesModalProps {
   onClose: () => void;
@@ -14,11 +15,7 @@ export default function ResetVotesModal({ onClose, onConfirm }: ResetVotesModalP
   const handleReset = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/reset-votes', {
-        method: 'POST',
-      });
-
-      if (!res.ok) throw new Error('Failed to reset votes');
+      await resetVotes();
 
       toast.success('Seluruh suara berhasil direset');
       await onConfirm();

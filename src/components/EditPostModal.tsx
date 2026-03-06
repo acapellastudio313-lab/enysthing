@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Post, User } from '../types';
 import { toast } from 'sonner';
-import { Trash2, Edit } from 'lucide-react';
+import { updatePost } from '../lib/db';
 
 interface EditPostModalProps {
   post: Post;
@@ -21,18 +21,13 @@ export default function EditPostModal({ post, user, onClose, onPostUpdated }: Ed
     }
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/posts/${post.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, userId: user.id }),
-      });
-      if (!res.ok) throw new Error('Gagal menyimpan perubahan');
-      const updatedPost = await res.json();
-      onPostUpdated(updatedPost);
+      await updatePost(post.id, { content });
+      onPostUpdated({ ...post, content });
       toast.success('Postingan berhasil diperbarui');
       onClose();
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Edit post error:', error);
+      toast.error(error.message || 'Terjadi kesalahan saat menyimpan perubahan');
     } finally {
       setIsSaving(false);
     }

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { User } from '../types';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
+import { deleteUser } from '../lib/db';
 
 interface DeleteUserModalProps {
   user: User;
@@ -18,14 +19,7 @@ export default function DeleteUserModal({ user, onClose, onConfirm }: DeleteUser
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Failed to delete user');
-      }
+      await deleteUser(user.id);
 
       toast.success('Pengguna berhasil dihapus');
       await onConfirm();

@@ -1,30 +1,24 @@
 import { Post } from '../types';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { formatDateWIB } from '../utils';
 import { MessageSquare, ThumbsUp, Trash2, Clock, User, FileText } from 'lucide-react';
-import { clsx } from 'clsx';
+import { deletePost } from '../lib/db';
+import { toast } from 'sonner';
 
 interface PostsContentProps {
   posts: Post[];
-  fetchAllPosts: () => Promise<void>;
 }
 
-export default function PostsContent({ posts, fetchAllPosts }: PostsContentProps) {
-  const handleDeletePost = async (postId: number) => {
+export default function PostsContent({ posts }: PostsContentProps) {
+  const handleDeletePost = async (postId: string) => {
     if (!window.confirm('Apakah Anda yakin ingin menghapus postingan ini?')) {
       return;
     }
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        fetchAllPosts();
-      } else {
-        alert('Gagal menghapus postingan');
-      }
-    } catch (err) {
-      alert('Terjadi kesalahan');
+      await deletePost(postId);
+      toast.success('Postingan berhasil dihapus');
+    } catch (error: any) {
+      console.error('Delete post error:', error);
+      toast.error(error.message || 'Gagal menghapus postingan');
     }
   };
 
@@ -59,7 +53,7 @@ export default function PostsContent({ posts, fetchAllPosts }: PostsContentProps
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 hidden md:table-cell">
-                  {format(new Date(post.created_at), 'dd MMM yyyy', { locale: id })}
+                  {formatDateWIB(post.created_at)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-3 text-slate-500">

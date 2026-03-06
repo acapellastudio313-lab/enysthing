@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Heart, MessageCircle, UserPlus } from 'lucide-react';
+import { Bell, Heart, MessageCircle, UserPlus, AtSign } from 'lucide-react';
 import { User, Notification } from '../types';
-import { formatDistanceToNow } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { formatDateWIB } from '../utils';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { AnimatePresence, motion } from 'motion/react';
+import { listenToNotifications, markNotificationsAsRead } from '../lib/db';
 
 export default function NotificationBell({ user }: { user: User }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -13,25 +13,12 @@ export default function NotificationBell({ user }: { user: User }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = () => {
-    fetch(`/api/notifications?userId=${user.id}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch notifications');
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          setNotifications(data);
-          setUnreadCount(data.filter((n: Notification) => n.is_read === 0).length);
-        }
-      })
-      .catch(err => console.error('Error fetching notifications:', err));
-  };
-
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 10000);
-    return () => clearInterval(interval);
+    const unsubscribe = listenToNotifications(user.id, (data) => {
+      setNotifications(data);
+      setUnreadCount(data.filter((n) => n.is_read === 0).length);
+    });
+    return () => unsubscribe();
   }, [user.id]);
 
   useEffect(() => {
@@ -44,14 +31,11 @@ export default function NotificationBell({ user }: { user: User }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleOpen = () => {
+  const handleOpen = async () => {
     setIsOpen(!isOpen);
     if (!isOpen && unreadCount > 0) {
-      fetch('/api/notifications/mark-read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id })
-      }).then(() => setUnreadCount(0));
+      await markNotificationsAsRead(user.id);
+      setUnreadCount(0);
     }
   };
 
@@ -94,7 +78,7 @@ export default function NotificationBell({ user }: { user: User }) {
               ) : (
                 notifications.map((notification) => (
                   <Link 
-                    to={notification.type === 'register' ? `/admin/users` : `/post/${notification.post_id}`} 
+                    to={notification.type === 'register' ? `/admin/users` : notification.type === 'story_tag' ? '/' : `/post/${notification.post_id}`} 
                     key={notification.id} 
                     onClick={() => setIsOpen(false)}
                     className={clsx(
@@ -106,11 +90,15 @@ export default function NotificationBell({ user }: { user: User }) {
                       <img src={notification.actor_avatar} alt={notification.actor_name} className="w-10 h-10 rounded-full" />
                       <div className={clsx(
                         "absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white",
-                        notification.type === 'like' ? "bg-pink-500" : notification.type === 'comment' ? "bg-emerald-500" : "bg-blue-500"
+                        notification.type === 'like' ? "bg-pink-500" : 
+                        notification.type === 'comment' ? "bg-emerald-500" : 
+                        notification.type === 'story_tag' ? "bg-purple-500" :
+                        "bg-blue-500"
                       )}>
                         {notification.type === 'like' && <Heart className="w-2.5 h-2.5 text-white fill-current" />}
                         {notification.type === 'comment' && <MessageCircle className="w-2.5 h-2.5 text-white fill-current" />}
                         {notification.type === 'register' && <UserPlus className="w-2.5 h-2.5 text-white" />}
+                        {notification.type === 'story_tag' && <AtSign className="w-2.5 h-2.5 text-white" />}
                       </div>
                     </div>
                     
@@ -120,9 +108,10 @@ export default function NotificationBell({ user }: { user: User }) {
                         {notification.type === 'like' && ' menyukai postingan Anda.'}
                         {notification.type === 'comment' && ' mengomentari postingan Anda.'}
                         {notification.type === 'register' && ' mendaftar sebagai pengguna baru.'}
+                        {notification.type === 'story_tag' && ' menandai Anda dalam cerita.'}
                       </p>
                       <p className="text-xs text-slate-500 mt-1">
-                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true, locale: id })}
+                        {formatDateWIB(notification.created_at)}
                       </p>
                     </div>
                   </Link>

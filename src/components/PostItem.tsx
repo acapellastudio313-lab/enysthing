@@ -1,28 +1,27 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { User, Post, Comment } from '../types';
 import { Heart, MessageCircle, Share2, Send, CheckCircle, X, Pin, Edit, Trash2 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { formatDateWIB } from '../utils';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import EditPostModal from './EditPostModal';
 import { toast } from 'sonner';
+import { addComment, listenToComments, likePost, checkIsLiked, deletePost, deleteComment, updateComment } from '../lib/db';
 
 interface PostItemProps {
   key?: number | string;
   post: Post;
   user: User;
-  onLike: (postId: number) => void;
-  onPin?: (postId: number, isPinned: boolean) => void;
-  onCommentAdded: () => void;
+  onLike: (postId: string) => void;
+  onPin?: (postId: string, isPinned: boolean) => void;
   onPostUpdated: (updatedPost: Post) => void;
-  onPostDeleted: (postId: number) => void;
+  onPostDeleted: (postId: string) => void;
   defaultShowComments?: boolean;
 }
 
-export default function PostItem({ post, user, onLike, onPin, onCommentAdded, onPostUpdated, onPostDeleted, defaultShowComments = false }: PostItemProps) {
+export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onPostDeleted, defaultShowComments = false }: PostItemProps) {
   const [showComments, setShowComments] = useState(defaultShowComments);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -30,7 +29,10 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentContent, setEditCommentContent] = useState('');
+  const [isLiked, setIsLiked] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -40,20 +42,19 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
     return () => clearInterval(interval);
   }, []);
 
-  const fetchComments = async () => {
-    setLoadingComments(true);
-    try {
-      const res = await fetch(`/api/posts/${post.id}/comments`);
-      const data = await res.json();
-      setComments(data);
-    } finally {
-      setLoadingComments(false);
+  useEffect(() => {
+    if (user && post.id) {
+      checkIsLiked(post.id, user.id).then(setIsLiked);
     }
-  };
+  }, [post.id, user.id]);
 
   useEffect(() => {
-    if (showComments) {
-      fetchComments();
+    if (showComments && post.id) {
+      const unsubscribe = listenToComments(post.id, (fetchedComments) => {
+        setComments(fetchedComments);
+        setLoadingComments(false);
+      });
+      return () => unsubscribe();
     }
   }, [showComments, post.id]);
 
@@ -61,25 +62,28 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    await fetch(`/api/posts/${post.id}/comment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author_id: user.id, content: newComment }),
-    });
+    try {
+      await addComment(post.id, { author_id: user.id, content: newComment });
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast.error('Gagal menambahkan komentar');
+    }
+  };
 
-    setNewComment('');
-    fetchComments();
-    onCommentAdded();
+  const handleLikeClick = async () => {
+    try {
+      await likePost(post.id, user.id);
+      setIsLiked(!isLiked);
+      onLike(post.id);
+    } catch (error) {
+      console.error('Error liking post:', error);
+    }
   };
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/posts/${post.id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      if (!res.ok) throw new Error('Gagal menghapus postingan');
+      await deletePost(post.id);
       toast.success('Postingan berhasil dihapus');
       onPostDeleted(post.id);
     } catch (error: any) {
@@ -88,23 +92,29 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
     setIsConfirmingDelete(false);
   };
 
-  const handleDeleteComment = async (commentId: number) => {
-    if (!window.confirm('Anda yakin ingin menghapus komentar ini?')) return;
+  const handleDeleteComment = async (commentId: string) => {
+    if (!user || !user.id) {
+      toast.error('User tidak ditemukan');
+      return;
+    }
     try {
-      const res = await fetch(`/api/comments/${commentId}?userId=${user.id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Gagal menghapus komentar');
-      }
+      await deleteComment(post.id, commentId);
       toast.success('Komentar berhasil dihapus');
-      setComments(comments.filter(c => c.id !== commentId));
-      onCommentAdded(); // To update counts
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Delete comment error:', error);
+      toast.error(error.message || 'Terjadi kesalahan saat menghapus komentar');
+    }
+  };
+
+  const handleEditComment = async (commentId: string, newContent: string) => {
+    try {
+      await updateComment(post.id, commentId, { content: newContent });
+      toast.success('Komentar berhasil diperbarui');
+      setComments(comments.map(c => c.id === commentId ? { ...c, content: newContent } : c));
+      setEditingCommentId(null);
+    } catch (error: any) {
+      console.error('Edit comment error:', error);
+      toast.error(error.message || 'Terjadi kesalahan saat mengedit komentar');
     }
   };
 
@@ -130,7 +140,7 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
               </Link>
               <span className="text-slate-400 text-xs md:text-sm">·</span>
               <span className="text-slate-500 text-xs md:text-sm hover:underline whitespace-nowrap">
-                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: id })}
+                {formatDateWIB(post.created_at)}
               </span>
               {post.updated_at && post.updated_at !== post.created_at && (
                 <span className="text-slate-400 text-xs md:text-sm">(diedit)</span>
@@ -143,7 +153,7 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
                   Disematkan
                 </div>
               )}
-              {user.id === post.author_id || user.role === 'admin' ? (
+              {Number(user.id) === Number(post.author_id) || user.role === 'admin' ? (
                 <div className="flex items-center gap-1">
                   <button onClick={() => setIsEditing(true)} className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Edit className="w-3.5 h-3.5" /></button>
                   <button onClick={() => setIsConfirmingDelete(true)} className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-full"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -186,17 +196,17 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
             </button>
             
             <button 
-              onClick={() => onLike(post.id)}
+              onClick={handleLikeClick}
               className={clsx(
                 "flex items-center gap-1.5 md:gap-2 group transition-colors",
-                post.is_liked === 1 ? "text-pink-600" : "text-slate-500 hover:text-pink-600"
+                isLiked ? "text-pink-600" : "text-slate-500 hover:text-pink-600"
               )}
             >
               <div className={clsx(
                 "p-1.5 md:p-2 rounded-full transition-colors",
-                post.is_liked === 1 ? "bg-pink-50" : "group-hover:bg-pink-50"
+                isLiked ? "bg-pink-50" : "group-hover:bg-pink-50"
               )}>
-                <Heart className={clsx("w-4 h-4 md:w-5 md:h-5", post.is_liked === 1 && "fill-current")} />
+                <Heart className={clsx("w-4 h-4 md:w-5 md:h-5", isLiked && "fill-current")} />
               </div>
               <span className="text-xs md:text-sm">{post.likes_count > 0 ? post.likes_count : ''}</span>
             </button>
@@ -280,15 +290,35 @@ export default function PostItem({ post, user, onLike, onPin, onCommentAdded, on
                             {comment.name}
                           </Link>
                           <span className="text-xs text-slate-500">
-                            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true, locale: id })}
+                            {formatDateWIB(comment.created_at)}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-800 mt-0.5">{comment.content}</p>
+                        {editingCommentId === comment.id ? (
+                          <div className="mt-1 flex gap-2">
+                            <input
+                              type="text"
+                              value={editCommentContent}
+                              onChange={(e) => setEditCommentContent(e.target.value)}
+                              className="flex-1 text-sm bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-emerald-500"
+                            />
+                            <button onClick={() => handleEditComment(comment.id, editCommentContent)} className="text-emerald-600 text-xs font-bold">Simpan</button>
+                            <button onClick={() => setEditingCommentId(null)} className="text-slate-500 text-xs">Batal</button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-800 mt-0.5">{comment.content}</p>
+                        )}
                       </div>
-                      {(user.id === comment.author_id || user.role === 'admin') && (
-                        <button onClick={() => handleDeleteComment(comment.id)} className="p-1 text-slate-400 hover:text-red-500 rounded-full ml-2 shrink-0">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                      {(Number(user.id) === Number(comment.author_id) || user.role === 'admin') && (
+                        <div className="flex flex-col gap-1">
+                          {Number(user.id) === Number(comment.author_id) && (
+                            <button onClick={() => { setEditingCommentId(comment.id); setEditCommentContent(comment.content); }} className="p-1 text-slate-400 hover:text-emerald-500 rounded-full">
+                              <Edit className="w-3 h-3" />
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteComment(comment.id)} className="p-1 text-slate-400 hover:text-red-500 rounded-full">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}

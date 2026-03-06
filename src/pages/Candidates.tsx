@@ -3,10 +3,12 @@ import { User, Candidate, ElectionStatus } from '../types';
 import { CheckCircle2, CheckCircle, ChevronRight, Info, Share2, Plus, X, Clock, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatDateWIB } from '../utils';
+import { getCandidates, getMyVote, listenToSettings, castVote } from '../lib/db';
 
 export default function Candidates({ user }: { user: User }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [myVote, setMyVote] = useState<{ candidate_id: number } | null>(null);
+  const [myVote, setMyVote] = useState<{ candidate_id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [voting, setVoting] = useState(false);
@@ -21,51 +23,45 @@ export default function Candidates({ user }: { user: User }) {
     descLabel: 'Visi & Misi'
   });
 
-  const fetchData = () => {
+  const fetchData = async () => {
     setLoading(true);
-    Promise.all([
-      fetch('/api/candidates').then(res => res.json()),
-      fetch(`/api/my-vote?userId=${user.id}`).then(res => res.json()),
-      fetch(`/api/settings/status?t=${Date.now()}`).then(res => res.json()),
-      fetch('/api/settings/candidate_page').then(res => res.json()),
-      fetch('/api/settings/general').then(res => res.json())
-    ]).then(([candsData, voteData, statusData, pageSettings, generalSettings]) => {
+    try {
+      const [candsData, voteData] = await Promise.all([
+        getCandidates(),
+        getMyVote(user.id)
+      ]);
       setCandidates(candsData);
       setMyVote(voteData);
-      setElectionStatus(statusData.status);
-      setEndDate(statusData.endDate);
-      setPageTitle(pageSettings.title);
-      setPageDescription(pageSettings.description);
-      setCandidateLabels({
-        label: generalSettings.candidateLabel || 'Agen Perubahan',
-        descLabel: generalSettings.candidateDescLabel || 'Visi & Misi'
-      });
-      setLoading(false);
-    }).catch(err => {
+    } catch (err) {
       console.error('Error fetching candidates data:', err);
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => {
     fetchData();
 
-    // WebSocket for real-time updates
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'election:status_changed') {
-        setElectionStatus(data.status);
-      } else if (data.type === 'settings:updated' && data.section === 'end_date') {
-        setEndDate(data.endDate);
-      } else if (data.type === 'vote:cast') {
-        // Optional: update counts if needed, but we don't show them here
+    const unsubscribeSettings = listenToSettings((settings) => {
+      if (settings.election_status) {
+        setElectionStatus(settings.election_status as ElectionStatus);
       }
-    };
+      if (settings.election_end_date) {
+        setEndDate(settings.election_end_date);
+      }
+      if (settings.candidate_page_title) {
+        setPageTitle(settings.candidate_page_title);
+      }
+      if (settings.candidate_page_description) {
+        setPageDescription(settings.candidate_page_description);
+      }
+      setCandidateLabels({
+        label: settings.candidate_label || 'Agen Perubahan',
+        descLabel: settings.candidate_desc_label || 'Visi & Misi'
+      });
+    });
 
-    return () => ws.close();
+    return () => unsubscribeSettings();
   }, [user.id]);
 
   useEffect(() => {
@@ -102,24 +98,16 @@ export default function Candidates({ user }: { user: User }) {
     return () => clearInterval(timer);
   }, [electionStatus, endDate]);
 
-  const handleVote = async (candidateId: number) => {
+  const handleVote = async (candidateId: string) => {
     if (myVote) return;
     setVoting(true);
     try {
-      const res = await fetch('/api/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voter_id: user.id, candidate_id: candidateId })
-      });
-      if (res.ok) {
-        setMyVote({ candidate_id: candidateId });
-        setSelectedCandidate(null);
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Gagal memberikan suara. Mungkin Anda sudah memilih.');
-      }
-    } catch (e) {
+      await castVote(user.id, candidateId);
+      setMyVote({ candidate_id: candidateId });
+      setSelectedCandidate(null);
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || 'Gagal memberikan suara. Mungkin Anda sudah memilih.');
     } finally {
       setVoting(false);
     }
@@ -146,7 +134,7 @@ export default function Candidates({ user }: { user: User }) {
             </div>
             {endDate && (
               <span className="text-xs bg-white/20 px-3 py-1.5 rounded-full font-medium">
-                Batas Waktu: {new Date(endDate).toLocaleDateString('id-ID')} {new Date(endDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                Batas Waktu: {formatDateWIB(endDate)}
               </span>
             )}
           </div>
