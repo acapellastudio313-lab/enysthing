@@ -60,11 +60,9 @@ export const updateSetting = async (key: string, value: string) => {
 // File Chunking Helpers
 const CHUNK_SIZE = 400 * 1024; // 400KB chunks to be safe (Firestore limit is 1MB)
 
-export const uploadFileChunks = async (file: File): Promise<string> => {
-  const fileId = doc(collection(db, "file_metadata")).id; // Generate ID
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+export const uploadFileChunks = async (file: File, onProgress?: (progress: number) => void): Promise<string> => {
+  const fileId = doc(collection(db, "file_metadata")).id;
   
-  // Convert file to base64 first
   const base64Data = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -72,14 +70,10 @@ export const uploadFileChunks = async (file: File): Promise<string> => {
     reader.onerror = error => reject(error);
   });
 
-  // The base64 string contains metadata "data:video/mp4;base64,...", we need to keep it for reconstruction
-  // But splitting it is fine as long as we reassemble it exactly.
+  const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
   
-  const batch = writeBatch(db);
-  
-  // Create metadata doc
   const metadataRef = doc(db, "file_metadata", fileId);
-  batch.set(metadataRef, {
+  await setDoc(metadataRef, {
     name: file.name,
     type: file.type,
     size: file.size,
@@ -87,21 +81,33 @@ export const uploadFileChunks = async (file: File): Promise<string> => {
     created_at: serverTimestamp()
   });
 
-  // Create chunks
-  for (let i = 0; i < totalChunks; i++) {
+  const uploadChunk = async (i: number) => {
     const start = i * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, base64Data.length);
     const chunk = base64Data.slice(start, end);
     
     const chunkRef = doc(db, "file_chunks", `${fileId}_${i}`);
-    batch.set(chunkRef, {
+    await setDoc(chunkRef, {
       file_id: fileId,
       index: i,
       data: chunk
     });
+    
+    if (onProgress) {
+      onProgress(Math.round(((i + 1) / totalChunks) * 100));
+    }
+  };
+
+  // Upload in small batches of 3 to speed up but stay within limits
+  const batchSize = 3;
+  for (let i = 0; i < totalChunks; i += batchSize) {
+    const batch = [];
+    for (let j = 0; j < batchSize && i + j < totalChunks; j++) {
+      batch.push(uploadChunk(i + j));
+    }
+    await Promise.all(batch);
   }
 
-  await batch.commit();
   return fileId;
 };
 
@@ -157,10 +163,13 @@ export const createPost = async (postData: any) => {
     content: postData.content,
     image_url: postData.image_url || null,
     video_url: postData.video_url || null,
-    video_file_id: postData.video_file_id || null, // Add this
+    video_file_id: postData.video_file_id || null,
     document_url: postData.document_url || null,
-    document_file_id: postData.document_file_id || null, // Add this
+    document_file_id: postData.document_file_id || null,
     audio_url: postData.audio_url || null,
+    audio_file_id: postData.audio_file_id || null,
+    is_uploading: postData.is_uploading || false,
+    upload_progress: postData.upload_progress || 0,
     created_at: serverTimestamp(),
     likes_count: 0,
     comments_count: 0,
@@ -409,6 +418,7 @@ export const deletePost = async (postId: string) => {
     const data = postSnap.data();
     if (data.video_file_id) await deleteFileChunks(data.video_file_id);
     if (data.document_file_id) await deleteFileChunks(data.document_file_id);
+    if (data.audio_file_id) await deleteFileChunks(data.audio_file_id);
   }
   await deleteDoc(postRef);
 };

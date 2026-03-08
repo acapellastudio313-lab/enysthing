@@ -39,6 +39,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
 
   const [videoSrc, setVideoSrc] = useState<string | null>(post.video_url || null);
   const [documentSrc, setDocumentSrc] = useState<string | null>(post.document_url || null);
+  const [audioSrc, setAudioSrc] = useState<string | null>(post.audio_url || null);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
 
   useEffect(() => {
@@ -55,9 +56,15 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
         if (url) setDocumentSrc(url);
         setIsLoadingMedia(false);
       }
+      if (post.audio_file_id && !audioSrc) {
+        setIsLoadingMedia(true);
+        const url = await getFileFromChunks(post.audio_file_id);
+        if (url) setAudioSrc(url);
+        setIsLoadingMedia(false);
+      }
     };
     loadMedia();
-  }, [post.video_file_id, post.document_file_id]);
+  }, [post.video_file_id, post.document_file_id, post.audio_file_id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -202,6 +209,28 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
           </div>
           <p className="mt-1 text-sm md:text-base text-slate-800 whitespace-pre-wrap break-words">{post.content}</p>
           
+          {post.is_uploading && (
+            <div className="mt-3 p-4 rounded-2xl border border-emerald-100 bg-emerald-50/30">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                  <span className="text-xs font-bold text-emerald-700">Sedang Mengunggah Lampiran...</span>
+                </div>
+                <span className="text-xs font-bold text-emerald-600">{post.upload_progress || 0}%</span>
+              </div>
+              <div className="w-full h-1.5 bg-emerald-100 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${post.upload_progress || 0}%` }}
+                  className="h-full bg-emerald-500"
+                />
+              </div>
+              <p className="text-[10px] text-emerald-500 mt-2 italic">
+                Postingan Anda akan tampil lengkap setelah proses upload selesai. Jangan tutup aplikasi jika memungkinkan.
+              </p>
+            </div>
+          )}
+
           {post.image_url && (
             <div 
               className="mt-3 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer"
@@ -264,9 +293,18 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
             </div>
           )}
 
-          {post.audio_url && (
+          {(audioSrc || post.audio_file_id) && (
             <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 p-2">
-              <audio src={post.audio_url} controls className="w-full h-10" />
+              {!audioSrc && isLoadingMedia ? (
+                <div className="flex items-center gap-2 p-1">
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                  <span className="text-xs text-slate-500">Memuat audio...</span>
+                </div>
+              ) : audioSrc ? (
+                <audio src={audioSrc} controls className="w-full h-10" />
+              ) : (
+                <div className="text-xs text-red-500">Gagal memuat audio</div>
+              )}
             </div>
           )}
 

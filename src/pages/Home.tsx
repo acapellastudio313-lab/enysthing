@@ -4,7 +4,9 @@ import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock, Video, FileTex
 import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
 import { formatDateWIB, compressImage } from '../utils';
-import { createPost, listenToPosts, listenToSettings, likePost, pinPost, uploadFileChunks } from '../lib/db';
+import { createPost, listenToPosts, listenToSettings, likePost, pinPost, uploadFileChunks, updatePost } from '../lib/db';
+import { db } from '../lib/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { toast } from 'sonner';
 
 export default function Home({ user }: { user: User }) {
@@ -208,28 +210,30 @@ export default function Home({ user }: { user: User }) {
     try {
       let videoFileId = null;
       let documentFileId = null;
+      let audioFileId = null;
+      let finalImageUrl = imageUrl;
+      const isUploading = !!(videoFile || documentFile || audioBlob);
 
-      if (videoFile) {
-        toast.info('Mengunggah video... Mohon tunggu');
-        videoFileId = await uploadFileChunks(videoFile);
-      }
+      // Generate IDs upfront if needed
+      if (videoFile) videoFileId = doc(collection(db, "file_metadata")).id;
+      if (documentFile) documentFileId = doc(collection(db, "file_metadata")).id;
+      if (audioBlob) audioFileId = doc(collection(db, "file_metadata")).id;
 
-      if (documentFile) {
-        toast.info('Mengunggah dokumen... Mohon tunggu');
-        documentFileId = await uploadFileChunks(documentFile);
-      }
-
-      await createPost({ 
+      const postId = await createPost({ 
         author_id: user.id, 
         content: newPost, 
         image_url: finalImageUrl,
-        video_url: null, // We use file ID now
+        video_url: null,
         video_file_id: videoFileId,
-        document_url: null, // We use file ID now
+        document_url: null,
         document_file_id: documentFileId,
-        audio_url: finalAudioUrl
+        audio_url: null,
+        audio_file_id: audioFileId,
+        is_uploading: isUploading,
+        upload_progress: 0
       });
 
+      // Reset form immediately
       setNewPost('');
       setImageUrl('');
       setShowImageInput(false);
@@ -240,7 +244,45 @@ export default function Home({ user }: { user: User }) {
       setDocumentName(null);
       setAudioBlob(null);
       setAudioUrl(null);
-      toast.success('Postingan berhasil dibuat!');
+      
+      if (isUploading) {
+        toast.success('Postingan sedang diunggah di latar belakang...');
+        
+        // Handle background uploads
+        const uploadPromises = [];
+        
+        if (videoFile && videoFileId) {
+          uploadPromises.push(uploadFileChunks(videoFile, (progress) => {
+            updatePost(postId, { upload_progress: progress });
+          }));
+        }
+        
+        if (documentFile && documentFileId) {
+          uploadPromises.push(uploadFileChunks(documentFile, (progress) => {
+            // If multiple files, we'd need a more complex progress tracking, 
+            // but for now we just update the same field.
+            updatePost(postId, { upload_progress: progress });
+          }));
+        }
+        
+        if (audioBlob && audioFileId) {
+          const audioFile = new File([audioBlob], 'recording.webm', { type: audioBlob.type });
+          uploadPromises.push(uploadFileChunks(audioFile, (progress) => {
+            updatePost(postId, { upload_progress: progress });
+          }));
+        }
+
+        // Wait for all uploads in background
+        Promise.all(uploadPromises).then(() => {
+          updatePost(postId, { is_uploading: false, upload_progress: 100 });
+          toast.success('Upload selesai! Postingan Anda kini tersedia.');
+        }).catch(err => {
+          console.error('Background upload error:', err);
+          toast.error('Gagal mengunggah beberapa file lampiran.');
+        });
+      } else {
+        toast.success('Postingan berhasil dibuat!');
+      }
     } catch (error) {
       console.error('Error creating post:', error);
       toast.error('Gagal membuat postingan');

@@ -148,9 +148,10 @@ export default function Messages({ user }: { user: User }) {
       let fileId = null;
       let url = currentAttachment?.url || null;
 
-      if (currentAttachment?.file && (currentAttachment.type === 'video' || currentAttachment.type === 'document')) {
+      if (currentAttachment?.file) {
+        // Use chunked upload for all files in messages to be safe
         fileId = await uploadFileChunks(currentAttachment.file);
-        url = null; // Use fileId instead
+        url = null; 
       }
 
       await sendMessage(user.id, selectedConversation.id, content, currentAttachment ? {

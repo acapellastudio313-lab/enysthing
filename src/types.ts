@@ -75,6 +75,9 @@ export interface Post {
   document_url?: string | null;
   document_file_id?: string | null;
   audio_url?: string | null;
+  audio_file_id?: string | null;
+  is_uploading?: boolean;
+  upload_progress?: number;
   is_pinned?: number;
   created_at: string;
   updated_at?: string;
