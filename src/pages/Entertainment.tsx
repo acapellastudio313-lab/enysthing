@@ -629,7 +629,20 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
   const [editDuration, setEditDuration] = useState(10); // Default 10s
   const wheelRef = useRef<HTMLCanvasElement>(null);
   const [rotation, setRotation] = useState(0);
-  const [lastSpinState, setLastSpinState] = useState<SpinState | null>(null);
+  
+  // Refs for listener to avoid re-subscription
+  const rotationRef = useRef(0);
+  const lastSpinStateRef = useRef<SpinState | null>(null);
+  const isEditingRef = useRef(isEditing);
+
+  // Update refs when state changes
+  useEffect(() => {
+    rotationRef.current = rotation;
+  }, [rotation]);
+
+  useEffect(() => {
+    isEditingRef.current = isEditing;
+  }, [isEditing]);
 
   // Canvas drawing for the wheel
   useEffect(() => {
@@ -719,70 +732,44 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       if (docSnap.exists()) {
         const data = docSnap.data() as SpinState;
         setSpinState(data);
-        if (!isEditing) {
+        
+        if (!isEditingRef.current) {
           setEditItems(data.items || []);
           setEditDuration(data.spinDuration || 10);
         }
         
         // Handle animation only when spinning starts
-        if (data.isSpinning && data.targetIndex !== null && (!lastSpinState || !lastSpinState.isSpinning)) {
+        const lastState = lastSpinStateRef.current;
+        
+        // Check if a new spin has started
+        // Condition: Currently spinning, target is set, and (previously not spinning OR it's a new spin time)
+        const isNewSpin = data.isSpinning && data.targetIndex !== null && 
+          (!lastState || !lastState.isSpinning || lastState.lastSpinTime !== data.lastSpinTime);
+
+        if (isNewSpin) {
           const itemsCount = data.items.length;
           const sliceAngle = 360 / itemsCount;
           
-          // Calculate target angle to align the center of the selected slice with the top (pointer)
-          // Slice i is from [i*slice - 90] to [(i+1)*slice - 90]
-          // Center of slice i is at: i*slice - 90 + slice/2
-          // We want this center to be at -90 (top)
-          // So we need to rotate by -(i*slice + slice/2)
-          
-          // Let's work in positive degrees relative to 0 for simplicity first
-          // Center of slice i relative to start (0) is: i*slice + slice/2
-          // We want to rotate the wheel such that this angle moves to 0 (top relative to start)
-          // So target rotation is -(i*slice + slice/2)
-          
-          const targetAngleFromStart = (data.targetIndex * sliceAngle) + (sliceAngle / 2);
+          const targetAngleFromStart = (data.targetIndex! * sliceAngle) + (sliceAngle / 2);
           const targetRotation = -targetAngleFromStart;
           
-          // Calculate total rotation to spin at least 5 times (1800 degrees)
-          // We want to reach targetRotation, but we are currently at `rotation`
-          // We want to spin CCW (decreasing angle)
-          // Next rotation should be: currentRotation - (spins * 360) + (offset to reach target)
+          // Use ref for current rotation to calculate next step
+          const currentRotation = rotationRef.current;
           
-          // Normalize current rotation to 0-360 range to find offset
-          const currentMod = rotation % 360;
+          // Add 5 full spins (1800 deg)
+          let newRotation = currentRotation - 1800;
+          const currentMod = newRotation % 360;
+          const targetMod = targetRotation % 360;
           
-          // We want to go to `targetRotation`
-          // But `targetRotation` is in range [-360, 0] roughly
-          // Let's say we are at 0. Target is -30. We want to go to -30 - 1800 = -1830.
-          // Let's say we are at -1830. Target is -90. We want to go to -90 - 1800 - (some full spins to keep going down)
-          
-          // Simpler approach:
-          // 1. Add 5 full spins (1800 deg) in negative direction
-          // 2. Adjust to land on specific angle
-          
-          // We want final rotation to be: targetRotation - (N * 360)
-          // Where N is enough to make it less than currentRotation - 1800
-          
-          // Current rotation: rotation
-          // Target base: targetRotation (e.g. -30)
-          // We want newRotation <= rotation - 1800
-          // And newRotation % 360 == targetRotation % 360
-          
-          // Let's just subtract 5 full spins from current rotation, then adjust the remainder
-          let newRotation = rotation - 1800;
-          const currentMod2 = newRotation % 360; // e.g. -1830 % 360 = -30
-          const targetMod = targetRotation % 360; // e.g. -30
-          
-          // Difference to apply
-          let diff = targetMod - currentMod2;
-          // Ensure we continue rotating in negative direction (CCW) if diff is positive
+          let diff = targetMod - currentMod;
           if (diff > 0) diff -= 360;
           
           newRotation += diff;
           
           setRotation(newRotation);
         }
-        setLastSpinState(data);
+        
+        lastSpinStateRef.current = data;
       } else {
         if (isAdminOrMod) {
           setDoc(doc(db, 'entertainment', 'spin'), {
@@ -802,7 +789,7 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
     });
 
     return () => unsubSpin();
-  }, [isAdminOrMod, isEditing, rotation, lastSpinState]);
+  }, [isAdminOrMod]); // Removed unstable dependencies
 
   const handleSaveItems = async () => {
     if (editItems.length < 2) {
