@@ -7,6 +7,7 @@ import { formatDateWIB, compressImage } from '../utils';
 import { createPost, listenToPosts, listenToSettings, likePost, pinPost, uploadFileChunks, updatePost } from '../lib/db';
 import { db } from '../lib/firebase';
 import { collection, doc } from 'firebase/firestore';
+import { setLocalMedia } from '../lib/mediaCache';
 import { toast } from 'sonner';
 
 export default function Home({ user }: { user: User }) {
@@ -194,6 +195,20 @@ export default function Home({ user }: { user: User }) {
     e.preventDefault();
     if (!newPost.trim() && !imageUrl && !audioUrl && !videoFile && !documentFile) return;
 
+    const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+    if (videoFile && videoFile.size > MAX_SIZE) {
+      toast.error('Ukuran video maksimal 100MB');
+      return;
+    }
+    if (documentFile && documentFile.size > MAX_SIZE) {
+      toast.error('Ukuran dokumen maksimal 100MB');
+      return;
+    }
+    if (audioBlob && audioBlob.size > MAX_SIZE) {
+      toast.error('Ukuran audio maksimal 100MB');
+      return;
+    }
+
     setIsSubmitting(true);
     let finalAudioUrl = null;
     if (audioBlob) {
@@ -215,9 +230,19 @@ export default function Home({ user }: { user: User }) {
       const isUploading = !!(videoFile || documentFile || audioBlob);
 
       // Generate IDs upfront if needed
-      if (videoFile) videoFileId = doc(collection(db, "file_metadata")).id;
-      if (documentFile) documentFileId = doc(collection(db, "file_metadata")).id;
-      if (audioBlob) audioFileId = doc(collection(db, "file_metadata")).id;
+      if (videoFile) {
+        videoFileId = doc(collection(db, "file_metadata")).id;
+        setLocalMedia(videoFileId, URL.createObjectURL(videoFile));
+      }
+      if (documentFile) {
+        documentFileId = doc(collection(db, "file_metadata")).id;
+        // For documents, we don't have a good local preview URL, but we'll store it anyway
+        setLocalMedia(documentFileId, URL.createObjectURL(documentFile));
+      }
+      if (audioBlob) {
+        audioFileId = doc(collection(db, "file_metadata")).id;
+        setLocalMedia(audioFileId, URL.createObjectURL(audioBlob));
+      }
 
       const postId = await createPost({ 
         author_id: user.id, 
@@ -246,9 +271,7 @@ export default function Home({ user }: { user: User }) {
       setAudioUrl(null);
       
       if (isUploading) {
-        toast.success('Postingan sedang diunggah di latar belakang...');
-        
-        // Handle background uploads
+        // Handle background uploads silently
         const uploadPromises = [];
         
         if (videoFile && videoFileId) {
@@ -275,10 +298,8 @@ export default function Home({ user }: { user: User }) {
         // Wait for all uploads in background
         Promise.all(uploadPromises).then(() => {
           updatePost(postId, { is_uploading: false, upload_progress: 100 });
-          toast.success('Upload selesai! Postingan Anda kini tersedia.');
         }).catch(err => {
           console.error('Background upload error:', err);
-          toast.error('Gagal mengunggah beberapa file lampiran.');
         });
       } else {
         toast.success('Postingan berhasil dibuat!');

@@ -110,7 +110,12 @@ export default function App() {
   }, []);
 
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+      <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-500 font-medium animate-pulse">Menyiapkan Aplikasi...</p>
+    </div>
+  );
 
   if (!user) {
     return <Login onLogin={setUser} />;

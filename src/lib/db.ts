@@ -113,25 +113,42 @@ export const uploadFileChunks = async (file: File, onProgress?: (progress: numbe
 
 export const getFileFromChunks = async (fileId: string): Promise<string | null> => {
   try {
-    // Get metadata to know how many chunks to expect (optional validation)
     const metadataSnap = await getDoc(doc(db, "file_metadata", fileId));
     if (!metadataSnap.exists()) return null;
     
-    const totalChunks = metadataSnap.data().total_chunks;
+    const { total_chunks, type } = metadataSnap.data();
     
     // Get all chunks
     const q = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
     const querySnapshot = await getDocs(q);
     
-    if (querySnapshot.empty) return null;
+    if (querySnapshot.size < total_chunks) {
+      console.warn(`File ${fileId} is incomplete: ${querySnapshot.size}/${total_chunks} chunks found.`);
+      return null;
+    }
 
     // Sort by index
     const chunks = querySnapshot.docs
       .map(doc => doc.data())
       .sort((a, b) => a.index - b.index);
       
-    // Reassemble
-    return chunks.map(c => c.data).join('');
+    // Reassemble base64 string
+    const fullBase64 = chunks.map(c => c.data).join('');
+    
+    // Convert base64 to Blob for better performance and reliability
+    // The base64 string from FileReader.readAsDataURL looks like "data:mime/type;base64,XXXXX"
+    const base64Content = fullBase64.split(',')[1];
+    if (!base64Content) return fullBase64; // Fallback if no prefix
+
+    const byteCharacters = atob(base64Content);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: type || 'application/octet-stream' });
+    
+    return URL.createObjectURL(blob);
   } catch (error) {
     console.error("Error reassembling file:", error);
     return null;

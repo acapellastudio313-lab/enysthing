@@ -9,6 +9,7 @@ import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import EditPostModal from './EditPostModal';
 import { toast } from 'sonner';
 import { addComment, listenToComments, likePost, checkIsLiked, deletePost, deleteComment, updateComment, getPostLikers, getFileFromChunks } from '../lib/db';
+import { getLocalMedia } from '../lib/mediaCache';
 
 interface PostItemProps {
   key?: number | string;
@@ -44,27 +45,67 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
 
   useEffect(() => {
     const loadMedia = async () => {
+      // Check local cache first for instant results for the uploader
       if (post.video_file_id && !videoSrc) {
-        setIsLoadingMedia(true);
-        const url = await getFileFromChunks(post.video_file_id);
-        if (url) setVideoSrc(url);
-        setIsLoadingMedia(false);
+        const local = getLocalMedia(post.video_file_id);
+        if (local) setVideoSrc(local);
       }
       if (post.document_file_id && !documentSrc) {
-        setIsLoadingMedia(true);
-        const url = await getFileFromChunks(post.document_file_id);
-        if (url) setDocumentSrc(url);
-        setIsLoadingMedia(false);
+        const local = getLocalMedia(post.document_file_id);
+        if (local) setDocumentSrc(local);
       }
       if (post.audio_file_id && !audioSrc) {
-        setIsLoadingMedia(true);
-        const url = await getFileFromChunks(post.audio_file_id);
-        if (url) setAudioSrc(url);
-        setIsLoadingMedia(false);
+        const local = getLocalMedia(post.audio_file_id);
+        if (local) setAudioSrc(local);
+      }
+
+      const fetchMedia = async () => {
+        // Don't try to fetch if it's still marked as uploading (unless we have it locally)
+        // This prevents "Gagal memuat" while chunks are still being written
+        if (post.is_uploading && !getLocalMedia(post.video_file_id || post.document_file_id || post.audio_file_id || '')) {
+          return;
+        }
+
+        if (post.video_file_id && !videoSrc) {
+          setIsLoadingMedia(true);
+          const url = await getFileFromChunks(post.video_file_id);
+          if (url) setVideoSrc(url);
+          setIsLoadingMedia(false);
+        }
+        if (post.document_file_id && !documentSrc) {
+          setIsLoadingMedia(true);
+          const url = await getFileFromChunks(post.document_file_id);
+          if (url) setDocumentSrc(url);
+          setIsLoadingMedia(false);
+        }
+        if (post.audio_file_id && !audioSrc) {
+          setIsLoadingMedia(true);
+          const url = await getFileFromChunks(post.audio_file_id);
+          if (url) setAudioSrc(url);
+          setIsLoadingMedia(false);
+        }
+      };
+
+      await fetchMedia();
+
+      // If still uploading, poll silently until ready
+      if (post.is_uploading) {
+        const pollInterval = setInterval(async () => {
+          if (!post.is_uploading) {
+            clearInterval(pollInterval);
+            await fetchMedia(); // Final fetch once upload is confirmed done
+            return;
+          }
+          // Only fetch if we don't have it yet
+          if ((post.video_file_id && !videoSrc) || (post.document_file_id && !documentSrc) || (post.audio_file_id && !audioSrc)) {
+            await fetchMedia();
+          }
+        }, 5000);
+        return () => clearInterval(pollInterval);
       }
     };
     loadMedia();
-  }, [post.video_file_id, post.document_file_id, post.audio_file_id]);
+  }, [post.video_file_id, post.document_file_id, post.audio_file_id, post.is_uploading]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -209,28 +250,6 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
           </div>
           <p className="mt-1 text-sm md:text-base text-slate-800 whitespace-pre-wrap break-words">{post.content}</p>
           
-          {post.is_uploading && (
-            <div className="mt-3 p-4 rounded-2xl border border-emerald-100 bg-emerald-50/30">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                  <span className="text-xs font-bold text-emerald-700">Sedang Mengunggah Lampiran...</span>
-                </div>
-                <span className="text-xs font-bold text-emerald-600">{post.upload_progress || 0}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-emerald-100 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${post.upload_progress || 0}%` }}
-                  className="h-full bg-emerald-500"
-                />
-              </div>
-              <p className="text-[10px] text-emerald-500 mt-2 italic">
-                Postingan Anda akan tampil lengkap setelah proses upload selesai. Jangan tutup aplikasi jika memungkinkan.
-              </p>
-            </div>
-          )}
-
           {post.image_url && (
             <div 
               className="mt-3 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer"
@@ -242,10 +261,12 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
 
           {(videoSrc || post.video_file_id) && (
             <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-black relative min-h-[200px] flex items-center justify-center">
-              {!videoSrc && isLoadingMedia ? (
+              {isLoadingMedia || (post.is_uploading && !videoSrc) ? (
                 <div className="text-white flex flex-col items-center gap-2">
-                  <Loader2 className="w-8 h-8 animate-spin" />
-                  <span className="text-xs">Memuat video...</span>
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                  <span className="text-xs text-slate-300">
+                    {post.is_uploading ? `Mengunggah... ${post.upload_progress || 0}%` : 'Memuat video...'}
+                  </span>
                 </div>
               ) : videoSrc ? (
                 <video 
@@ -256,21 +277,29 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   className="w-full h-auto max-h-[500px]" 
                   onError={(e) => {
                     console.error("Video playback error", e);
-                    toast.error("Gagal memutar video. Format mungkin tidak didukung atau file rusak.");
+                    // Only show error if not uploading
+                    if (!post.is_uploading) {
+                      toast.error("Gagal memutar video. Format mungkin tidak didukung.");
+                    }
                   }}
                 />
-              ) : (
-                <div className="text-white text-sm">Gagal memuat video</div>
-              )}
+              ) : !post.is_uploading ? (
+                <div className="text-white text-sm flex flex-col items-center gap-2">
+                  <Video className="w-8 h-8 text-slate-600" />
+                  <span className="text-slate-400">Gagal memuat video</span>
+                </div>
+              ) : null}
             </div>
           )}
 
           {(documentSrc || post.document_file_id) && (
             <div className="mt-3">
-              {(!documentSrc && isLoadingMedia) ? (
+              {(isLoadingMedia || (post.is_uploading && !documentSrc)) ? (
                 <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
-                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-                  <span className="text-sm text-slate-500">Memuat dokumen...</span>
+                  <Loader2 className="w-5 h-5 animate-spin text-emerald-500" />
+                  <span className="text-sm text-slate-500">
+                    {post.is_uploading ? `Mengunggah dokumen... ${post.upload_progress || 0}%` : 'Memuat dokumen...'}
+                  </span>
                 </div>
               ) : documentSrc ? (
                 <a 
@@ -280,31 +309,33 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
                 >
                   <div className="p-2 bg-white rounded-lg border border-slate-200">
-                    <FileText className="w-6 h-6 text-slate-500" />
+                    <FileText className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-900 truncate">Dokumen Lampiran</p>
-                    <p className="text-xs text-slate-500">Klik untuk melihat</p>
+                    <p className="text-xs text-slate-500">Klik untuk melihat/unduh</p>
                   </div>
                 </a>
-              ) : (
-                <div className="text-sm text-red-500">Gagal memuat dokumen</div>
-              )}
+              ) : !post.is_uploading ? (
+                <div className="text-sm text-red-500 p-3 border border-red-100 bg-red-50 rounded-xl">Gagal memuat dokumen</div>
+              ) : null}
             </div>
           )}
 
           {(audioSrc || post.audio_file_id) && (
             <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 p-2">
-              {!audioSrc && isLoadingMedia ? (
+              {(isLoadingMedia || (post.is_uploading && !audioSrc)) ? (
                 <div className="flex items-center gap-2 p-1">
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                  <span className="text-xs text-slate-500">Memuat audio...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                  <span className="text-xs text-slate-500">
+                    {post.is_uploading ? `Mengunggah audio... ${post.upload_progress || 0}%` : 'Memuat audio...'}
+                  </span>
                 </div>
               ) : audioSrc ? (
                 <audio src={audioSrc} controls className="w-full h-10" />
-              ) : (
-                <div className="text-xs text-red-500">Gagal memuat audio</div>
-              )}
+              ) : !post.is_uploading ? (
+                <div className="text-xs text-red-500 p-1">Gagal memuat audio</div>
+              ) : null}
             </div>
           )}
 
