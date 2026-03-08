@@ -3,7 +3,7 @@ import { User, Message, Conversation } from '../types';
 import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus, Paperclip, X, FileText, Image as ImageIcon, Video, Trash2, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB, compressImage } from '../utils';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead, deleteMessage, uploadFileChunks, getFileFromChunks } from '../lib/db';
+import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead, deleteMessage, uploadFile } from '../lib/db';
 
 export default function Messages({ user }: { user: User }) {
   const location = useLocation();
@@ -27,30 +27,11 @@ export default function Messages({ user }: { user: User }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [attachment, setAttachment] = useState<{ url: string | null, type: 'image' | 'video' | 'document', name?: string, file?: File } | null>(null);
+  const [attachment, setAttachment] = useState<{ url: string, type: 'image' | 'video' | 'document', name?: string, file?: File | Blob } | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [messageMedia, setMessageMedia] = useState<Record<string, string>>({});
-  const [loadingMedia, setLoadingMedia] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    const loadChunkedMedia = async () => {
-      for (const msg of messages) {
-        if (msg.attachment_file_id && !messageMedia[msg.id] && !loadingMedia[msg.id]) {
-          setLoadingMedia(prev => ({ ...prev, [msg.id]: true }));
-          const url = await getFileFromChunks(msg.attachment_file_id);
-          if (url) {
-            setMessageMedia(prev => ({ ...prev, [msg.id]: url }));
-          }
-          setLoadingMedia(prev => ({ ...prev, [msg.id]: false }));
-        }
-      }
-    };
-    loadChunkedMedia();
-  }, [messages]);
 
   useEffect(() => {
     const init = async () => {
@@ -119,48 +100,46 @@ export default function Messages({ user }: { user: User }) {
     if (type === 'image') {
        try {
          const url = await compressImage(file);
-         setAttachment({ url, type, name: file.name, file });
+         setAttachment({ url, type, name: file.name, file: file });
        } catch (e) {
          console.error(e);
          alert('Gagal memproses gambar');
        }
     } else {
-       const reader = new FileReader();
-       reader.onloadend = () => {
-         setAttachment({ url: reader.result as string, type, name: file.name, file });
-       };
-       reader.readAsDataURL(file);
+       const url = URL.createObjectURL(file);
+       setAttachment({ url, type, name: file.name, file: file });
     }
   };
 
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
-    if ((!newMessage.trim() && !attachment) || !selectedConversation) return;
+    if (((!newMessage.trim() && !attachment) || !selectedConversation) || isSending) return;
 
+    setIsSending(true);
     const content = newMessage.trim();
     const currentAttachment = attachment;
     
     setNewMessage('');
     setAttachment(null);
-    setIsSending(true);
 
     try {
-      let fileId = null;
-      let url = currentAttachment?.url || null;
-
+      let finalAttachmentUrl = currentAttachment?.url || null;
       if (currentAttachment?.file) {
-        // Use chunked upload for all files in messages to be safe
-        fileId = await uploadFileChunks(currentAttachment.file);
-        url = null; 
+        const path = `messages/${Date.now()}_${currentAttachment.name}`;
+        finalAttachmentUrl = await uploadFile(currentAttachment.file, path);
+      } else if (currentAttachment?.url.startsWith('data:image')) {
+        const response = await fetch(currentAttachment.url);
+        const blob = await response.blob();
+        finalAttachmentUrl = await uploadFile(blob, `messages/${Date.now()}.jpg`);
       }
 
-      await sendMessage(user.id, selectedConversation.id, content, currentAttachment ? {
-        url,
-        file_id: fileId,
-        type: currentAttachment.type
+      await sendMessage(user.id, selectedConversation.id, content, finalAttachmentUrl ? {
+        url: finalAttachmentUrl,
+        type: currentAttachment!.type
       } : undefined);
     } catch (err) {
       console.error('Failed to send message', err);
+      alert('Gagal mengirim pesan: ' + (err instanceof Error ? err.message : 'Kesalahan tidak diketahui'));
     } finally {
       setIsSending(false);
     }
@@ -358,34 +337,19 @@ export default function Messages({ user }: { user: User }) {
                           ? 'bg-emerald-600 text-white rounded-tr-none' 
                           : 'bg-white text-slate-800 rounded-tl-none'
                       }`}>
-                        {(msg.attachment_url || msg.attachment_file_id) && (
+                        {msg.attachment_url && (
                           <div className="mb-2">
                             {msg.attachment_type === 'image' && (
-                              <img src={msg.attachment_url || messageMedia[msg.id]} alt="Attachment" className="max-w-full rounded-lg" />
+                              <img src={msg.attachment_url} alt="Attachment" className="max-w-full rounded-lg" />
                             )}
                             {msg.attachment_type === 'video' && (
-                              <div className="relative min-h-[100px] flex items-center justify-center">
-                                {loadingMedia[msg.id] ? (
-                                  <Loader2 className="w-6 h-6 animate-spin" />
-                                ) : (
-                                  <video src={msg.attachment_url || messageMedia[msg.id]} controls className="max-w-full rounded-lg" />
-                                )}
-                              </div>
+                              <video src={msg.attachment_url} controls className="max-w-full rounded-lg" />
                             )}
                             {msg.attachment_type === 'document' && (
-                              <div className="relative">
-                                {loadingMedia[msg.id] ? (
-                                  <div className="flex items-center gap-2 p-2 bg-black/10 rounded-lg">
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span className="text-xs">Memuat dokumen...</span>
-                                  </div>
-                                ) : (
-                                  <a href={msg.attachment_url || messageMedia[msg.id]} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 p-2 rounded-lg hover:bg-black/20 transition-colors">
-                                    <FileText className="w-5 h-5" />
-                                    <span className="underline">Lihat Dokumen</span>
-                                  </a>
-                                )}
-                              </div>
+                              <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 p-2 rounded-lg hover:bg-black/20 transition-colors">
+                                <FileText className="w-5 h-5" />
+                                <span className="underline">Lihat Dokumen</span>
+                              </a>
                             )}
                           </div>
                         )}
@@ -447,9 +411,13 @@ export default function Messages({ user }: { user: User }) {
                 <button
                   type="submit"
                   disabled={(!newMessage.trim() && !attachment) || isSending}
-                  className="p-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:hover:bg-emerald-600"
+                  className="p-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:hover:bg-emerald-600 flex items-center justify-center"
                 >
-                  {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                  {isSending ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
                 </button>
               </form>
             </div>

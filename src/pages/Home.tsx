@@ -4,17 +4,12 @@ import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock, Video, FileTex
 import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
 import { formatDateWIB, compressImage } from '../utils';
-import { createPost, listenToPosts, listenToSettings, likePost, pinPost, uploadFileChunks, updatePost } from '../lib/db';
-import { db } from '../lib/firebase';
-import { collection, doc } from 'firebase/firestore';
-import { setLocalMedia } from '../lib/mediaCache';
-import { toast } from 'sonner';
+import { createPost, listenToPosts, listenToSettings, likePost, pinPost, uploadFile } from '../lib/db';
 
 export default function Home({ user }: { user: User }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [imageUrl, setImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
@@ -25,6 +20,7 @@ export default function Home({ user }: { user: User }) {
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState<string | null>(null);
+  const [isPosting, setIsPosting] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,27 +60,8 @@ export default function Home({ user }: { user: User }) {
     return () => {
       unsubscribePosts();
       unsubscribeSettings();
-      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
-
-  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-    // Check if any post is currently being uploaded from this session
-    // We can check the local storage or a global flag
-    if (isSubmitting) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  };
-
-  useEffect(() => {
-    if (isSubmitting) {
-      window.addEventListener('beforeunload', handleBeforeUnload);
-    } else {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    }
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isSubmitting]);
 
   useEffect(() => {
     if (!electionEndDate || electionStatus !== 'in_progress') {
@@ -212,72 +189,44 @@ export default function Home({ user }: { user: User }) {
 
   const handlePost = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newPost.trim() && !imageUrl && !audioUrl && !videoFile && !documentFile) return;
+    if (!newPost.trim() && !imageUrl && !audioUrl && !videoUrl && !documentUrl) return;
 
-    const MAX_SIZE = 100 * 1024 * 1024; // 100MB
-    if (videoFile && videoFile.size > MAX_SIZE) {
-      toast.error('Ukuran video maksimal 100MB');
-      return;
-    }
-    if (documentFile && documentFile.size > MAX_SIZE) {
-      toast.error('Ukuran dokumen maksimal 100MB');
-      return;
-    }
-    if (audioBlob && audioBlob.size > MAX_SIZE) {
-      toast.error('Ukuran audio maksimal 100MB');
-      return;
-    }
-
-    setIsSubmitting(true);
-    let finalAudioUrl = null;
-    if (audioBlob) {
-      // Convert blob to base64
-      finalAudioUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(audioBlob);
-      });
-    }
-
-    const finalImageUrl = imageUrl || (showImageInput && !imageUrl ? `https://picsum.photos/seed/${Math.random()}/800/600` : null);
-
+    setIsPosting(true);
     try {
-      let videoFileId = null;
-      let documentFileId = null;
-      let audioFileId = null;
-      let finalImageUrl = imageUrl;
-      const isUploading = !!(videoFile || documentFile || audioBlob);
-
-      // Generate IDs upfront if needed
-      if (videoFile) {
-        videoFileId = doc(collection(db, "file_metadata")).id;
-        setLocalMedia(videoFileId, URL.createObjectURL(videoFile));
-      }
-      if (documentFile) {
-        documentFileId = doc(collection(db, "file_metadata")).id;
-        // For documents, we don't have a good local preview URL, but we'll store it anyway
-        setLocalMedia(documentFileId, URL.createObjectURL(documentFile));
-      }
+      let finalAudioUrl = null;
       if (audioBlob) {
-        audioFileId = doc(collection(db, "file_metadata")).id;
-        setLocalMedia(audioFileId, URL.createObjectURL(audioBlob));
+        finalAudioUrl = await uploadFile(audioBlob, `audio/${Date.now()}.webm`);
       }
 
-      const postId = await createPost({ 
+      let finalVideoUrl = videoUrl;
+      if (videoFile) {
+        finalVideoUrl = await uploadFile(videoFile, `videos/${Date.now()}_${videoFile.name}`);
+      }
+
+      let finalDocumentUrl = documentUrl;
+      if (documentFile) {
+        finalDocumentUrl = await uploadFile(documentFile, `documents/${Date.now()}_${documentFile.name}`);
+      }
+
+      // For images, if it's a data URL from compressImage, we should also upload it to be safe
+      let finalImageUrl = imageUrl;
+      if (imageUrl && imageUrl.startsWith('data:image')) {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        finalImageUrl = await uploadFile(blob, `images/${Date.now()}.jpg`);
+      } else if (showImageInput && !imageUrl) {
+        finalImageUrl = `https://picsum.photos/seed/${Math.random()}/800/600`;
+      }
+
+      await createPost({ 
         author_id: user.id, 
         content: newPost, 
         image_url: finalImageUrl,
-        video_url: null,
-        video_file_id: videoFileId,
-        document_url: null,
-        document_file_id: documentFileId,
-        audio_url: null,
-        audio_file_id: audioFileId,
-        is_uploading: isUploading,
-        upload_progress: 0
+        video_url: finalVideoUrl,
+        document_url: finalDocumentUrl,
+        audio_url: finalAudioUrl
       });
 
-      // Reset form immediately
       setNewPost('');
       setImageUrl('');
       setShowImageInput(false);
@@ -288,59 +237,11 @@ export default function Home({ user }: { user: User }) {
       setDocumentName(null);
       setAudioBlob(null);
       setAudioUrl(null);
-      
-      if (isUploading) {
-        // Handle background uploads silently
-        const uploadPromises = [];
-        
-        if (videoFile && videoFileId) {
-          let lastUpdate = 0;
-          uploadPromises.push(uploadFileChunks(videoFile, (progress) => {
-            const now = Date.now();
-            if (now - lastUpdate > 1000 || progress === 100) {
-              updatePost(postId, { upload_progress: progress });
-              lastUpdate = now;
-            }
-          }));
-        }
-        
-        if (documentFile && documentFileId) {
-          let lastUpdate = 0;
-          uploadPromises.push(uploadFileChunks(documentFile, (progress) => {
-            const now = Date.now();
-            if (now - lastUpdate > 1000 || progress === 100) {
-              updatePost(postId, { upload_progress: progress });
-              lastUpdate = now;
-            }
-          }));
-        }
-        
-        if (audioBlob && audioFileId) {
-          let lastUpdate = 0;
-          const audioFile = new File([audioBlob], 'recording.webm', { type: audioBlob.type });
-          uploadPromises.push(uploadFileChunks(audioFile, (progress) => {
-            const now = Date.now();
-            if (now - lastUpdate > 1000 || progress === 100) {
-              updatePost(postId, { upload_progress: progress });
-              lastUpdate = now;
-            }
-          }));
-        }
-
-        // Wait for all uploads in background
-        Promise.all(uploadPromises).then(() => {
-          updatePost(postId, { is_uploading: false, upload_progress: 100 });
-        }).catch(err => {
-          console.error('Background upload error:', err);
-        });
-      } else {
-        toast.success('Postingan berhasil dibuat!');
-      }
     } catch (error) {
       console.error('Error creating post:', error);
-      toast.error('Gagal membuat postingan');
+      alert('Gagal membuat postingan: ' + (error instanceof Error ? error.message : 'Kesalahan tidak diketahui'));
     } finally {
-      setIsSubmitting(false);
+      setIsPosting(false);
     }
   };
 
@@ -361,15 +262,10 @@ export default function Home({ user }: { user: User }) {
   const handleVideoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // No size limit check here as requested
       setVideoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setVideoUrl(reader.result as string);
-      };
-      reader.onerror = () => {
-        console.error('Error reading video file');
-        alert('Gagal membaca file video');
       };
       reader.readAsDataURL(file);
     }
@@ -379,9 +275,12 @@ export default function Home({ user }: { user: User }) {
     const file = e.target.files?.[0];
     if (file) {
       setDocumentFile(file);
-      setDocumentName(file.name);
-      // Preview only
-      setDocumentUrl('preview'); 
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setDocumentUrl(reader.result as string);
+        setDocumentName(file.name);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -632,10 +531,11 @@ export default function Home({ user }: { user: User }) {
               </div>
               <button
                 type="submit"
-                disabled={(!newPost.trim() && !imageUrl && !audioUrl && !videoUrl && !documentUrl) || isRecording}
-                className="bg-emerald-600 text-white px-4 md:px-6 py-1.5 md:py-2 rounded-full font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={(!newPost.trim() && !imageUrl && !audioUrl && !videoUrl && !documentUrl) || isRecording || isPosting}
+                className="bg-emerald-600 text-white px-4 md:px-6 py-1.5 md:py-2 rounded-full font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
-                Posting
+                {isPosting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isPosting ? 'Memposting...' : 'Posting'}
               </button>
             </div>
           </form>

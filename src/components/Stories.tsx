@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatDateWIB, compressImage } from '../utils';
 import { clsx } from 'clsx';
 import { toast } from 'sonner';
-import { createStory, listenToStories, deleteStory, search, viewStory } from '../lib/db';
+import { createStory, listenToStories, deleteStory, search, viewStory, uploadFile } from '../lib/db';
 
 interface StoryGroup {
   user_id: string;
@@ -362,7 +362,7 @@ export default function Stories({ user }: { user: User }) {
   const [showUpload, setShowUpload] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadMedia, setUploadMedia] = useState<{ url: string, type: 'image' | 'video' } | null>(null);
+  const [uploadMedia, setUploadMedia] = useState<{ url: string, type: 'image' | 'video', file?: File | Blob } | null>(null);
   
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   
@@ -442,7 +442,8 @@ export default function Stories({ user }: { user: User }) {
       
       setUploadMedia({
         type: file.type.startsWith('video/') ? 'video' : 'image',
-        url: result
+        url: result,
+        file: file
       });
       setShowUpload(true);
       stopCamera();
@@ -510,9 +511,13 @@ export default function Stories({ user }: { user: User }) {
         }
         ctx.drawImage(videoRef.current, 0, 0);
         const url = canvas.toDataURL('image/jpeg');
-        setUploadMedia({ url, type: 'image' });
-        stopCamera();
-        setShowUpload(true);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            setUploadMedia({ url, type: 'image', file: blob });
+            stopCamera();
+            setShowUpload(true);
+          }
+        }, 'image/jpeg', 0.8);
       }
     }
   };
@@ -531,7 +536,7 @@ export default function Stories({ user }: { user: User }) {
         const mimeType = mediaRecorder.mimeType || 'video/webm';
         const blob = new Blob(chunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
-        setUploadMedia({ url, type: 'video' });
+        setUploadMedia({ url, type: 'video', file: blob });
         stopCamera();
         setShowUpload(true);
       };
@@ -595,9 +600,21 @@ export default function Stories({ user }: { user: User }) {
     
     setIsUploading(true);
     try {
+      let finalMediaUrl = uploadMedia.url;
+      
+      if (uploadMedia.file) {
+        const path = uploadMedia.type === 'video' ? `stories/videos/${Date.now()}.webm` : `stories/images/${Date.now()}.jpg`;
+        finalMediaUrl = await uploadFile(uploadMedia.file, path);
+      } else if (uploadMedia.url.startsWith('data:image')) {
+        // Fallback for data URLs if file object is missing
+        const response = await fetch(uploadMedia.url);
+        const blob = await response.blob();
+        finalMediaUrl = await uploadFile(blob, `stories/images/${Date.now()}.jpg`);
+      }
+
       await createStory({
         user_id: user.id,
-        media_url: uploadMedia.url,
+        media_url: finalMediaUrl,
         media_type: uploadMedia.type,
         text_overlays: textOverlay ? [textOverlay] : [],
         tags: taggedUsers
@@ -611,7 +628,7 @@ export default function Stories({ user }: { user: User }) {
       setIsEditingText(false);
     } catch (e) {
       console.error(e);
-      alert('Gagal mengunggah cerita. Silakan coba lagi.');
+      alert('Gagal mengunggah cerita: ' + (e instanceof Error ? e.message : 'Kesalahan tidak diketahui'));
     } finally {
       setIsUploading(false);
     }

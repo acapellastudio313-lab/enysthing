@@ -1,6 +1,14 @@
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, orderBy, limit, increment, arrayUnion, arrayRemove, Timestamp, writeBatch } from "firebase/firestore";
-import { db } from "./firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "./firebase";
 import { User, Post, Comment, Story, Candidate, LeaderboardEntry, Conversation, Message, Notification } from "../types";
+
+// Storage Functions
+export const uploadFile = async (file: File | Blob, path: string): Promise<string> => {
+  const fileRef = ref(storage, path);
+  await uploadBytes(fileRef, file);
+  return getDownloadURL(fileRef);
+};
 
 // User Functions
 export const getUser = async (id: string): Promise<User | null> => {
@@ -57,120 +65,6 @@ export const updateSetting = async (key: string, value: string) => {
   await setDoc(doc(db, "settings", key), { value });
 };
 
-// File Chunking Helpers
-const CHUNK_SIZE = 512 * 1024; // 512KB chunks for optimal Firestore performance
-
-export const uploadFileChunks = async (file: File, onProgress?: (progress: number) => void): Promise<string> => {
-  const fileId = doc(collection(db, "file_metadata")).id;
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  
-  // Create metadata doc
-  const metadataRef = doc(db, "file_metadata", fileId);
-  await setDoc(metadataRef, {
-    name: file.name,
-    type: file.type,
-    size: file.size,
-    total_chunks: totalChunks,
-    created_at: serverTimestamp()
-  });
-
-  const uploadChunk = async (i: number) => {
-    const start = i * CHUNK_SIZE;
-    const end = Math.min(start + CHUNK_SIZE, file.size);
-    const blob = file.slice(start, end);
-    
-    // Read chunk as ArrayBuffer for binary storage
-    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as ArrayBuffer);
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(blob);
-    });
-
-    const chunkRef = doc(db, "file_chunks", `${fileId}_${i}`);
-    await setDoc(chunkRef, {
-      file_id: fileId,
-      index: i,
-      data: new Uint8Array(arrayBuffer) // Store as binary Bytes
-    });
-    
-    if (onProgress) {
-      onProgress(Math.round(((i + 1) / totalChunks) * 100));
-    }
-  };
-
-  // Upload in batches to balance speed and reliability
-  const batchSize = 5;
-  for (let i = 0; i < totalChunks; i += batchSize) {
-    const batch = [];
-    for (let j = 0; j < batchSize && i + j < totalChunks; j++) {
-      batch.push(uploadChunk(i + j));
-    }
-    await Promise.all(batch);
-  }
-
-  return fileId;
-};
-
-export const getFileFromChunks = async (fileId: string): Promise<string | null> => {
-  try {
-    const metadataSnap = await getDoc(doc(db, "file_metadata", fileId));
-    if (!metadataSnap.exists()) return null;
-    
-    const { total_chunks, type } = metadataSnap.data();
-    
-    // Get all chunks
-    const q = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.size < total_chunks) {
-      return null;
-    }
-
-    // Sort by index and extract data
-    const chunks = querySnapshot.docs
-      .map(doc => doc.data())
-      .sort((a, b) => a.index - b.index);
-      
-    // Reassemble binary data
-    const totalSize = chunks.reduce((acc, c) => acc + c.data.length, 0);
-    const mergedArray = new Uint8Array(totalSize);
-    let offset = 0;
-    for (const chunk of chunks) {
-      mergedArray.set(chunk.data, offset);
-      offset += chunk.data.length;
-    }
-    
-    const blob = new Blob([mergedArray], { type: type || 'application/octet-stream' });
-    return URL.createObjectURL(blob);
-  } catch (error) {
-    console.error("Error reassembling file:", error);
-    return null;
-  }
-};
-
-export const deleteFileChunks = async (fileId: string) => {
-  try {
-    // Delete metadata
-    await deleteDoc(doc(db, "file_metadata", fileId));
-    
-    // Delete chunks in batches to avoid limits
-    const q = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
-    const querySnapshot = await getDocs(q);
-    
-    const chunks = querySnapshot.docs;
-    const batchSize = 400;
-    for (let i = 0; i < chunks.length; i += batchSize) {
-      const batch = writeBatch(db);
-      const currentBatch = chunks.slice(i, i + batchSize);
-      currentBatch.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-    }
-  } catch (error) {
-    console.error("Error deleting file chunks:", error);
-  }
-};
-
 // Posts
 export const createPost = async (postData: any) => {
   const docRef = await addDoc(collection(db, "posts"), {
@@ -178,13 +72,8 @@ export const createPost = async (postData: any) => {
     content: postData.content,
     image_url: postData.image_url || null,
     video_url: postData.video_url || null,
-    video_file_id: postData.video_file_id || null,
     document_url: postData.document_url || null,
-    document_file_id: postData.document_file_id || null,
     audio_url: postData.audio_url || null,
-    audio_file_id: postData.audio_file_id || null,
-    is_uploading: postData.is_uploading || false,
-    upload_progress: postData.upload_progress || 0,
     created_at: serverTimestamp(),
     likes_count: 0,
     comments_count: 0,
@@ -427,15 +316,7 @@ export const updatePost = async (postId: string, data: any) => {
 };
 
 export const deletePost = async (postId: string) => {
-  const postRef = doc(db, "posts", postId);
-  const postSnap = await getDoc(postRef);
-  if (postSnap.exists()) {
-    const data = postSnap.data();
-    if (data.video_file_id) await deleteFileChunks(data.video_file_id);
-    if (data.document_file_id) await deleteFileChunks(data.document_file_id);
-    if (data.audio_file_id) await deleteFileChunks(data.audio_file_id);
-  }
-  await deleteDoc(postRef);
+  await deleteDoc(doc(db, "posts", postId));
 };
 
 export const deleteComment = async (postId: string, commentId: string) => {
@@ -621,14 +502,13 @@ export const listenToMessages = (userId: string, otherUserId: string, callback: 
   });
 };
 
-export const sendMessage = async (userId: string, otherUserId: string, text: string, attachment?: { url: string | null, type: 'image' | 'video' | 'document', file_id?: string | null }) => {
+export const sendMessage = async (userId: string, otherUserId: string, text: string, attachment?: { url: string, type: 'image' | 'video' | 'document' }) => {
   const conversationId = [userId, otherUserId].sort().join("_");
   const messageData = {
     sender_id: userId,
     receiver_id: otherUserId,
     text,
     attachment_url: attachment?.url || null,
-    attachment_file_id: attachment?.file_id || null,
     attachment_type: attachment?.type || null,
     is_read: false,
     created_at: serverTimestamp(),
