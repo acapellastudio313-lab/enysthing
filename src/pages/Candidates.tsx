@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { User, Candidate, ElectionStatus } from '../types';
 import { CheckCircle2, CheckCircle, ChevronRight, Info, Share2, Plus, X, Clock, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -11,6 +12,26 @@ export default function Candidates({ user }: { user: User }) {
   const [myVote, setMyVote] = useState<{ candidate_id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  
+  const [searchParams, setSearchParams] = useSearchParams();
+  const candidateId = searchParams.get('candidateId');
+
+  const updateSelectedCandidate = (candidate: Candidate | null) => {
+    setSelectedCandidate(candidate);
+    if (candidate) {
+      setSearchParams({ candidateId: candidate.id });
+    } else {
+      setSearchParams({});
+    }
+  };
+
+  useEffect(() => {
+    if (candidateId && candidates.length > 0) {
+      const found = candidates.find(c => c.id === candidateId);
+      if (found) setSelectedCandidate(found);
+    }
+  }, [candidates, candidateId]);
+
   const [voting, setVoting] = useState(false);
   const [electionStatus, setElectionStatus] = useState<ElectionStatus>('not_started');
   const [endDate, setEndDate] = useState<string | null>(null);
@@ -104,7 +125,7 @@ export default function Candidates({ user }: { user: User }) {
     try {
       await castVote(user.id, candidateId);
       setMyVote({ candidate_id: candidateId });
-      setSelectedCandidate(null);
+      updateSelectedCandidate(null);
     } catch (e: any) {
       console.error(e);
       alert(e.message || 'Gagal memberikan suara. Mungkin Anda sudah memilih.');
@@ -186,7 +207,7 @@ export default function Candidates({ user }: { user: User }) {
           <motion.div
             layoutId={`candidate-${candidate.id}`}
             key={candidate.id}
-            onClick={() => setSelectedCandidate(candidate)}
+            onClick={() => updateSelectedCandidate(candidate)}
             whileHover={{ y: -4, scale: 1.005 }}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
             className={clsx(
@@ -250,7 +271,7 @@ export default function Candidates({ user }: { user: User }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedCandidate(null)}
+              onClick={() => updateSelectedCandidate(null)}
               className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40"
             />
             <motion.div
@@ -263,7 +284,7 @@ export default function Candidates({ user }: { user: User }) {
               <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-white to-transparent z-10 pointer-events-none rounded-t-3xl" />
               
               <button
-                onClick={() => setSelectedCandidate(null)}
+                onClick={() => updateSelectedCandidate(null)}
                 className="absolute top-4 right-4 p-2 bg-slate-100/80 backdrop-blur-sm hover:bg-slate-200 rounded-full text-slate-600 transition-colors z-20 shadow-sm"
               >
                 <X className="w-5 h-5" />
@@ -330,7 +351,7 @@ export default function Candidates({ user }: { user: User }) {
                     <Share2 className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => setSelectedCandidate(null)}
+                    onClick={() => updateSelectedCandidate(null)}
                     className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors text-sm md:text-base"
                   >
                     Tutup

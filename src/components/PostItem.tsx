@@ -170,7 +170,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   Disematkan
                 </div>
               )}
-              {Number(user.id) === Number(post.author_id) || user.role === 'admin' ? (
+              {String(user.id) === String(post.author_id) || user.role === 'admin' ? (
                 <div className="flex items-center gap-1">
                   <button onClick={() => setIsEditing(true)} className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Edit className="w-3.5 h-3.5" /></button>
                   <button onClick={() => setIsConfirmingDelete(true)} className="p-1 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-full"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -191,7 +191,17 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
 
           {post.video_url && (
             <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-black">
-              <video src={post.video_url} controls className="w-full h-auto max-h-[500px]" />
+              <video 
+                src={post.video_url} 
+                controls 
+                playsInline
+                preload="metadata"
+                className="w-full h-auto max-h-[500px]" 
+                onError={(e) => {
+                  console.error("Video playback error", e);
+                  toast.error("Gagal memutar video. Format mungkin tidak didukung atau file rusak.");
+                }}
+              />
             </div>
           )}
 

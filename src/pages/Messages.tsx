@@ -2,15 +2,28 @@ import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import { User, Message, Conversation } from '../types';
 import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus, Paperclip, X, FileText, Image as ImageIcon, Video, Trash2, Check, CheckCheck } from 'lucide-react';
 import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB, compressImage } from '../utils';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead, deleteMessage } from '../lib/db';
 
 export default function Messages({ user }: { user: User }) {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const conversationId = searchParams.get('conversationId');
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [showUserList, setShowUserList] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+
+  const updateSelectedConversation = (conv: Conversation | null) => {
+    setSelectedConversation(conv);
+    if (conv) {
+      setSearchParams({ conversationId: conv.id });
+    } else {
+      setSearchParams({});
+    }
+  };
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -33,7 +46,7 @@ export default function Messages({ user }: { user: User }) {
         if (state?.startWith) {
           const existing = convs.find(c => c.id === state.startWith?.id);
           if (existing) {
-            setSelectedConversation(existing);
+            updateSelectedConversation(existing);
           } else {
             // Create a temporary conversation object
             const tempConv: Conversation = {
@@ -45,7 +58,12 @@ export default function Messages({ user }: { user: User }) {
               last_message_time: new Date().toISOString(),
               unread_count: 0
             };
-            setSelectedConversation(tempConv);
+            updateSelectedConversation(tempConv);
+          }
+        } else if (conversationId) {
+          const existing = convs.find(c => c.id === conversationId);
+          if (existing) {
+            setSelectedConversation(existing);
           }
         }
       });
@@ -143,7 +161,7 @@ export default function Messages({ user }: { user: User }) {
   const handleStartChat = (targetUser: User) => {
     const existing = conversations.find(c => c.id === targetUser.id);
     if (existing) {
-      setSelectedConversation(existing);
+      updateSelectedConversation(existing);
     } else {
       const tempConv: Conversation = {
         id: targetUser.id,
@@ -154,7 +172,7 @@ export default function Messages({ user }: { user: User }) {
         last_message_time: new Date().toISOString(),
         unread_count: 0
       };
-      setSelectedConversation(tempConv);
+      updateSelectedConversation(tempConv);
       setConversations(prev => [tempConv, ...prev]);
     }
     setShowUserList(false);
@@ -218,7 +236,7 @@ export default function Messages({ user }: { user: User }) {
             filteredConversations.map((conv) => (
               <button
                 key={conv.id}
-                onClick={() => setSelectedConversation(conv)}
+                onClick={() => updateSelectedConversation(conv)}
                 className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors border-b border-slate-50 ${selectedConversation?.id === conv.id ? 'bg-emerald-50/50' : ''}`}
               >
                 <div className="relative shrink-0">
@@ -261,7 +279,7 @@ export default function Messages({ user }: { user: User }) {
             <div className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 shrink-0">
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => setSelectedConversation(null)}
+                  onClick={() => updateSelectedConversation(null)}
                   className="md:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900"
                 >
                   <ArrowLeft className="w-5 h-5" />

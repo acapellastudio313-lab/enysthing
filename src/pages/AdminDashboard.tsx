@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent, MouseEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { User, Post, Candidate, ElectionStatus } from '../types';
 import { Trash2, Shield, UserCheck, Users, FileText, BarChart2, AlertTriangle, Edit3, CheckCircle, X, Trophy, Clock, RefreshCw, RotateCcw, Loader2, UserPlus } from 'lucide-react';
 import { formatDateWIB } from '../utils';
@@ -29,7 +30,14 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'candidates' | 'leaderboard'>('users');
+  
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as 'users' | 'posts' | 'candidates' | 'leaderboard') || 'users';
+
+  const setActiveTab = (tab: 'users' | 'posts' | 'candidates' | 'leaderboard') => {
+    setSearchParams({ tab });
+  };
+
   const [loading, setLoading] = useState(true);
   const [electionStatus, setElectionStatus] = useState<ElectionStatus>('not_started');
   const [updatingStatus, setUpdatingStatus] = useState(false);

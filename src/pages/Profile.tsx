@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, ChangeEvent, MouseEvent, TouchEvent } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { User, Post, Candidate } from '../types';
 import { Settings, Edit3, MapPin, Briefcase, Info, X, Camera, MessageSquare, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,7 +14,14 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'posts' | 'campaign'>('posts');
+  
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as 'posts' | 'campaign') || 'posts';
+
+  const setActiveTab = (tab: 'posts' | 'campaign') => {
+    setSearchParams({ tab });
+  };
+
   const [candidateData, setCandidateData] = useState<Candidate | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ 

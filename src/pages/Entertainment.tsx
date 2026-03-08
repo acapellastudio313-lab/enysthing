@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { User } from '../types';
 import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -7,7 +8,13 @@ import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 
 export default function Entertainment({ user }: { user: User }) {
-  const [activeTab, setActiveTab] = useState<'kuis' | 'spin'>('kuis');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as 'kuis' | 'spin') || 'kuis';
+
+  const setActiveTab = (tab: 'kuis' | 'spin') => {
+    setSearchParams({ tab });
+  };
+
   const isAdminOrMod = user.role === 'admin' || user.role === 'moderator';
 
   return (

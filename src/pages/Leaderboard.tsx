@@ -11,7 +11,13 @@ export default function Leaderboard({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [electionStatus, setElectionStatus] = useState<ElectionStatus>('not_started');
   const [leaderboardSettings, setLeaderboardSettings] = useState({ title: 'Klasemen Sementara', description: 'Pemilihan Agen Perubahan 2024' });
-  const [showNonVoters, setShowNonVoters] = useState(false);
+  const [showNonVoters, setShowNonVoters] = useState(() => {
+    return localStorage.getItem('leaderboard_showNonVoters') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('leaderboard_showNonVoters', String(showNonVoters));
+  }, [showNonVoters]);
 
   useEffect(() => {
     const fetchData = async () => {

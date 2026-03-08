@@ -241,9 +241,20 @@ export default function Home({ user }: { user: User }) {
   const handleVideoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Check file size (max 1MB for Firestore compatibility)
+      if (file.size > 1024 * 1024) {
+        alert('Ukuran video terlalu besar (maks 1MB). Silakan pilih video yang lebih kecil.');
+        if (videoInputRef.current) videoInputRef.current.value = '';
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setVideoUrl(reader.result as string);
+      };
+      reader.onerror = () => {
+        console.error('Error reading video file');
+        alert('Gagal membaca file video');
       };
       reader.readAsDataURL(file);
     }
