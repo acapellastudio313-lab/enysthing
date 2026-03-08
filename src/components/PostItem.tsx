@@ -44,24 +44,28 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    let pollInterval: any = null;
+
     const loadMedia = async () => {
       // Check local cache first for instant results for the uploader
       if (post.video_file_id && !videoSrc) {
         const local = getLocalMedia(post.video_file_id);
-        if (local) setVideoSrc(local);
+        if (local && isMounted) setVideoSrc(local);
       }
       if (post.document_file_id && !documentSrc) {
         const local = getLocalMedia(post.document_file_id);
-        if (local) setDocumentSrc(local);
+        if (local && isMounted) setDocumentSrc(local);
       }
       if (post.audio_file_id && !audioSrc) {
         const local = getLocalMedia(post.audio_file_id);
-        if (local) setAudioSrc(local);
+        if (local && isMounted) setAudioSrc(local);
       }
 
       const fetchMedia = async () => {
+        if (!isMounted) return;
+        
         // Don't try to fetch if it's still marked as uploading (unless we have it locally)
-        // This prevents "Gagal memuat" while chunks are still being written
         if (post.is_uploading && !getLocalMedia(post.video_file_id || post.document_file_id || post.audio_file_id || '')) {
           return;
         }
@@ -69,19 +73,19 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
         if (post.video_file_id && !videoSrc) {
           setIsLoadingMedia(true);
           const url = await getFileFromChunks(post.video_file_id);
-          if (url) setVideoSrc(url);
+          if (url && isMounted) setVideoSrc(url);
           setIsLoadingMedia(false);
         }
         if (post.document_file_id && !documentSrc) {
           setIsLoadingMedia(true);
           const url = await getFileFromChunks(post.document_file_id);
-          if (url) setDocumentSrc(url);
+          if (url && isMounted) setDocumentSrc(url);
           setIsLoadingMedia(false);
         }
         if (post.audio_file_id && !audioSrc) {
           setIsLoadingMedia(true);
           const url = await getFileFromChunks(post.audio_file_id);
-          if (url) setAudioSrc(url);
+          if (url && isMounted) setAudioSrc(url);
           setIsLoadingMedia(false);
         }
       };
@@ -90,21 +94,25 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
 
       // If still uploading, poll silently until ready
       if (post.is_uploading) {
-        const pollInterval = setInterval(async () => {
+        pollInterval = setInterval(async () => {
           if (!post.is_uploading) {
             clearInterval(pollInterval);
-            await fetchMedia(); // Final fetch once upload is confirmed done
+            await fetchMedia();
             return;
           }
-          // Only fetch if we don't have it yet
           if ((post.video_file_id && !videoSrc) || (post.document_file_id && !documentSrc) || (post.audio_file_id && !audioSrc)) {
             await fetchMedia();
           }
         }, 5000);
-        return () => clearInterval(pollInterval);
       }
     };
+
     loadMedia();
+
+    return () => {
+      isMounted = false;
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [post.video_file_id, post.document_file_id, post.audio_file_id, post.is_uploading]);
 
   useEffect(() => {
@@ -287,6 +295,18 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                 <div className="text-white text-sm flex flex-col items-center gap-2">
                   <Video className="w-8 h-8 text-slate-600" />
                   <span className="text-slate-400">Gagal memuat video</span>
+                  <button 
+                    onClick={() => {
+                      setIsLoadingMedia(true);
+                      getFileFromChunks(post.video_file_id!).then(url => {
+                        if (url) setVideoSrc(url);
+                        setIsLoadingMedia(false);
+                      });
+                    }}
+                    className="text-emerald-500 text-xs font-bold hover:underline"
+                  >
+                    Coba Lagi
+                  </button>
                 </div>
               ) : null}
             </div>

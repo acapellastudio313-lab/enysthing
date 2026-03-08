@@ -58,20 +58,13 @@ export const updateSetting = async (key: string, value: string) => {
 };
 
 // File Chunking Helpers
-const CHUNK_SIZE = 400 * 1024; // 400KB chunks to be safe (Firestore limit is 1MB)
+const CHUNK_SIZE = 512 * 1024; // 512KB chunks for optimal Firestore performance
 
 export const uploadFileChunks = async (file: File, onProgress?: (progress: number) => void): Promise<string> => {
   const fileId = doc(collection(db, "file_metadata")).id;
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   
-  const base64Data = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-
-  const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
-  
+  // Create metadata doc
   const metadataRef = doc(db, "file_metadata", fileId);
   await setDoc(metadataRef, {
     name: file.name,
@@ -83,14 +76,22 @@ export const uploadFileChunks = async (file: File, onProgress?: (progress: numbe
 
   const uploadChunk = async (i: number) => {
     const start = i * CHUNK_SIZE;
-    const end = Math.min(start + CHUNK_SIZE, base64Data.length);
-    const chunk = base64Data.slice(start, end);
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    const blob = file.slice(start, end);
     
+    // Read chunk as ArrayBuffer for binary storage
+    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    });
+
     const chunkRef = doc(db, "file_chunks", `${fileId}_${i}`);
     await setDoc(chunkRef, {
       file_id: fileId,
       index: i,
-      data: chunk
+      data: new Uint8Array(arrayBuffer) // Store as binary Bytes
     });
     
     if (onProgress) {
@@ -98,8 +99,8 @@ export const uploadFileChunks = async (file: File, onProgress?: (progress: numbe
     }
   };
 
-  // Upload in small batches of 3 to speed up but stay within limits
-  const batchSize = 3;
+  // Upload in batches to balance speed and reliability
+  const batchSize = 5;
   for (let i = 0; i < totalChunks; i += batchSize) {
     const batch = [];
     for (let j = 0; j < batchSize && i + j < totalChunks; j++) {
@@ -123,31 +124,24 @@ export const getFileFromChunks = async (fileId: string): Promise<string | null> 
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.size < total_chunks) {
-      console.warn(`File ${fileId} is incomplete: ${querySnapshot.size}/${total_chunks} chunks found.`);
       return null;
     }
 
-    // Sort by index
+    // Sort by index and extract data
     const chunks = querySnapshot.docs
       .map(doc => doc.data())
       .sort((a, b) => a.index - b.index);
       
-    // Reassemble base64 string
-    const fullBase64 = chunks.map(c => c.data).join('');
-    
-    // Convert base64 to Blob for better performance and reliability
-    // The base64 string from FileReader.readAsDataURL looks like "data:mime/type;base64,XXXXX"
-    const base64Content = fullBase64.split(',')[1];
-    if (!base64Content) return fullBase64; // Fallback if no prefix
-
-    const byteCharacters = atob(base64Content);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    // Reassemble binary data
+    const totalSize = chunks.reduce((acc, c) => acc + c.data.length, 0);
+    const mergedArray = new Uint8Array(totalSize);
+    let offset = 0;
+    for (const chunk of chunks) {
+      mergedArray.set(chunk.data, offset);
+      offset += chunk.data.length;
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: type || 'application/octet-stream' });
     
+    const blob = new Blob([mergedArray], { type: type || 'application/octet-stream' });
     return URL.createObjectURL(blob);
   } catch (error) {
     console.error("Error reassembling file:", error);
@@ -157,17 +151,21 @@ export const getFileFromChunks = async (fileId: string): Promise<string | null> 
 
 export const deleteFileChunks = async (fileId: string) => {
   try {
-    const batch = writeBatch(db);
-    
     // Delete metadata
-    batch.delete(doc(db, "file_metadata", fileId));
+    await deleteDoc(doc(db, "file_metadata", fileId));
     
-    // Delete chunks
+    // Delete chunks in batches to avoid limits
     const q = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
     const querySnapshot = await getDocs(q);
-    querySnapshot.docs.forEach(doc => batch.delete(doc.ref));
     
-    await batch.commit();
+    const chunks = querySnapshot.docs;
+    const batchSize = 400;
+    for (let i = 0; i < chunks.length; i += batchSize) {
+      const batch = writeBatch(db);
+      const currentBatch = chunks.slice(i, i + batchSize);
+      currentBatch.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
   } catch (error) {
     console.error("Error deleting file chunks:", error);
   }

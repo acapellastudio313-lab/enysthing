@@ -64,8 +64,27 @@ export default function Home({ user }: { user: User }) {
     return () => {
       unsubscribePosts();
       unsubscribeSettings();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
+
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    // Check if any post is currently being uploaded from this session
+    // We can check the local storage or a global flag
+    if (isSubmitting) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  };
+
+  useEffect(() => {
+    if (isSubmitting) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    } else {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isSubmitting]);
 
   useEffect(() => {
     if (!electionEndDate || electionStatus !== 'in_progress') {
@@ -275,23 +294,36 @@ export default function Home({ user }: { user: User }) {
         const uploadPromises = [];
         
         if (videoFile && videoFileId) {
+          let lastUpdate = 0;
           uploadPromises.push(uploadFileChunks(videoFile, (progress) => {
-            updatePost(postId, { upload_progress: progress });
+            const now = Date.now();
+            if (now - lastUpdate > 1000 || progress === 100) {
+              updatePost(postId, { upload_progress: progress });
+              lastUpdate = now;
+            }
           }));
         }
         
         if (documentFile && documentFileId) {
+          let lastUpdate = 0;
           uploadPromises.push(uploadFileChunks(documentFile, (progress) => {
-            // If multiple files, we'd need a more complex progress tracking, 
-            // but for now we just update the same field.
-            updatePost(postId, { upload_progress: progress });
+            const now = Date.now();
+            if (now - lastUpdate > 1000 || progress === 100) {
+              updatePost(postId, { upload_progress: progress });
+              lastUpdate = now;
+            }
           }));
         }
         
         if (audioBlob && audioFileId) {
+          let lastUpdate = 0;
           const audioFile = new File([audioBlob], 'recording.webm', { type: audioBlob.type });
           uploadPromises.push(uploadFileChunks(audioFile, (progress) => {
-            updatePost(postId, { upload_progress: progress });
+            const now = Date.now();
+            if (now - lastUpdate > 1000 || progress === 100) {
+              updatePost(postId, { upload_progress: progress });
+              lastUpdate = now;
+            }
           }));
         }
 
