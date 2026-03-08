@@ -113,7 +113,7 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
 
   const handleLike = async (postId: string) => {
     try {
-      await likePost(postId, currentUser.id);
+      // likePost is already handled in PostItem.tsx
     } catch (err) {
       console.error(err);
     }
@@ -241,10 +241,6 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
   const handleCampaignImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Ukuran file maksimal 5MB');
-        return;
-      }
       try {
         const compressedUrl = await compressImage(file);
         setCampaignForm(prev => ({ ...prev, image_url: compressedUrl }));
@@ -286,10 +282,6 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
   const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>, field: 'avatar' | 'cover_url') => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setEditError('Ukuran file maksimal 5MB');
-        return;
-      }
       setEditError('');
       try {
         const compressedUrl = await compressImage(file);

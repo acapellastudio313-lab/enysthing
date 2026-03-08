@@ -425,14 +425,9 @@ export default function Stories({ user }: { user: User }) {
     // Reset input value to allow selecting same file again
     e.target.value = '';
 
-    if (file.size > 1 * 1024 * 1024) {
-      toast.error('Ukuran file maksimal 1MB (Batasan Firestore)');
-      return;
-    }
-
     try {
       let result: string;
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith('image/') || file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
         // Compress image
         result = await compressImage(file);
       } else {
@@ -453,7 +448,11 @@ export default function Stories({ user }: { user: User }) {
       stopCamera();
     } catch (error) {
       console.error('Error reading file:', error);
-      toast.error('Gagal memproses file');
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error('Gagal memproses file. Silakan coba lagi.');
+      }
     }
   };
 
@@ -682,7 +681,7 @@ export default function Stories({ user }: { user: User }) {
           );
         })}
       </div>
-      <input type="file" accept="image/*,video/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+      <input type="file" accept="image/*,video/*,.heic" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
 
       {/* Camera Modal */}
       <AnimatePresence>

@@ -17,6 +17,7 @@ import PostDetail from './pages/PostDetail';
 import Login from './pages/Login';
 import Messages from './pages/Messages';
 import AdminDashboard from './pages/AdminDashboard';
+import Entertainment from './pages/Entertainment';
 import { Megaphone, X as CloseIcon } from 'lucide-react';
 import { getUser, listenToSettings, listenToNotifications, initAdmin } from './lib/db';
 
@@ -125,6 +126,7 @@ export default function App() {
           <Route path="/candidates" element={<Candidates user={user} />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/leaderboard" element={<Leaderboard user={user} />} />
+          <Route path="/entertainment" element={<Entertainment user={user} />} />
           <Route path="/profile" element={<Profile user={user} onUpdateUser={setUser} />} />
           <Route path="/profile/:userId" element={<Profile user={user} onUpdateUser={setUser} />} />
           <Route path="/messages" element={<Messages user={user} />} />

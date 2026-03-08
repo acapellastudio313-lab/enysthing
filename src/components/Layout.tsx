@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Home, Users, Trophy, User as UserIcon, LogOut, Search, MessageSquare, Shield } from 'lucide-react';
+import { Home, Users, Trophy, User as UserIcon, LogOut, Search, MessageSquare, Shield, Gamepad2 } from 'lucide-react';
 import { User } from '../types';
 import { clsx } from 'clsx';
 import NotificationBanner from './NotificationBanner';
@@ -24,6 +24,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
     { icon: Search, label: 'Eksplor', to: '/explore', mobileOnly: true },
     { icon: Users, label: 'Kandidat', to: '/candidates' },
     { icon: Trophy, label: 'Klasemen', to: '/leaderboard' },
+    { icon: Gamepad2, label: 'Hiburan', to: '/entertainment' },
     { icon: UserIcon, label: 'Profil', to: '/profile' },
   ];
 

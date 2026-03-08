@@ -120,6 +120,10 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
   };
 
   const handleEditComment = async (commentId: string, newContent: string) => {
+    if (!newContent.trim()) {
+      toast.error('Komentar tidak boleh kosong');
+      return;
+    }
     try {
       await updateComment(post.id, commentId, { content: newContent });
       toast.success('Komentar berhasil diperbarui');

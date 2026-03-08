@@ -38,7 +38,7 @@ export default function PostDetail({ user }: { user: User }) {
 
   const handleLike = async (id: string) => {
     try {
-      await likePost(id, user.id);
+      // likePost is already handled in PostItem.tsx
       fetchPost();
     } catch (err) {
       console.error(err);

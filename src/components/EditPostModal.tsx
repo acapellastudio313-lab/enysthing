@@ -15,7 +15,7 @@ export default function EditPostModal({ post, user, onClose, onPostUpdated }: Ed
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
-    if (!content.trim()) {
+    if (!content.trim() && !post.image_url && !post.video_url && !post.document_url && !post.audio_url) {
       toast.error('Postingan tidak boleh kosong');
       return;
     }

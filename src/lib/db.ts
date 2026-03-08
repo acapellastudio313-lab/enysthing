@@ -86,7 +86,7 @@ export const listenToPosts = (callback: (posts: Post[]) => void) => {
         name: author?.name || "Unknown",
         avatar: author?.avatar || "",
         username: author?.username || "",
-        created_at: data.created_at?.toDate()?.toISOString() || new Date().toISOString(),
+        created_at: data.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as Post;
     }));
     
@@ -200,7 +200,7 @@ export const listenToComments = (postId: string, callback: (comments: Comment[])
         name: author?.name || "Unknown",
         avatar: author?.avatar || "",
         username: author?.username || "",
-        created_at: data.created_at?.toDate()?.toISOString() || new Date().toISOString(),
+        created_at: data.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as Comment;
     }));
     callback(comments);
@@ -231,8 +231,8 @@ export const listenToStories = (callback: (stories: Story[]) => void) => {
         ...data,
         user_name: author?.name || "Unknown",
         user_avatar: author?.avatar || "",
-        created_at: data.created_at?.toDate()?.toISOString() || new Date().toISOString(),
-        expires_at: data.expires_at?.toDate()?.toISOString() || new Date().toISOString(),
+        created_at: data.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+        expires_at: data.expires_at?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as Story;
     }));
     callback(stories);
@@ -283,7 +283,14 @@ export const listenToSettings = (callback: (settings: Record<string, string>) =>
 export const listenToNotifications = (userId: string, callback: (notifications: Notification[]) => void) => {
   const q = query(collection(db, "users", userId, "notifications"), orderBy("created_at", "desc"), limit(20));
   return onSnapshot(q, (snapshot) => {
-    const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+    const notifications = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        created_at: data.created_at?.toDate?.()?.toISOString() || new Date().toISOString()
+      } as Notification;
+    });
     callback(notifications);
   });
 };
@@ -462,7 +469,7 @@ export const listenToConversations = (userId: string, callback: (conversations: 
         username: otherUser?.username || "",
         avatar: otherUser?.avatar || "",
         last_message: data.last_message,
-        last_message_time: data.last_message_time?.toDate().toISOString() || new Date().toISOString(),
+        last_message_time: data.last_message_time?.toDate?.()?.toISOString() || new Date().toISOString(),
         unread_count: data.unread_count?.[userId] || 0,
       } as Conversation;
     }));
@@ -481,7 +488,7 @@ export const listenToMessages = (userId: string, otherUserId: string, callback: 
     const messages = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      created_at: doc.data().created_at?.toDate().toISOString() || new Date().toISOString(),
+      created_at: doc.data().created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
     } as Message));
     callback(messages);
   });
@@ -495,6 +502,7 @@ export const sendMessage = async (userId: string, otherUserId: string, text: str
     text,
     attachment_url: attachment?.url || null,
     attachment_type: attachment?.type || null,
+    is_read: false,
     created_at: serverTimestamp(),
   };
 
@@ -527,11 +535,34 @@ export const markAsRead = async (userId: string, otherUserId: string) => {
   const conversationId = [userId, otherUserId].sort().join("_");
   const convRef = doc(db, "conversations", conversationId);
   const convDoc = await getDoc(convRef);
+  
   if (convDoc.exists()) {
     await updateDoc(convRef, {
       [`unread_count.${userId}`]: 0,
     });
   }
+
+  // Mark all unread messages from otherUserId as read
+  const messagesRef = collection(db, "conversations", conversationId, "messages");
+  const unreadQuery = query(
+    messagesRef,
+    where("sender_id", "==", otherUserId),
+    where("is_read", "==", false)
+  );
+  
+  const unreadDocs = await getDocs(unreadQuery);
+  if (!unreadDocs.empty) {
+    const batch = writeBatch(db);
+    unreadDocs.forEach((doc) => {
+      batch.update(doc.ref, { is_read: true });
+    });
+    await batch.commit();
+  }
+};
+
+export const deleteMessage = async (userId: string, otherUserId: string, messageId: string) => {
+  const conversationId = [userId, otherUserId].sort().join("_");
+  await deleteDoc(doc(db, "conversations", conversationId, "messages", messageId));
 };
 
 // Admin

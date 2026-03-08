@@ -102,20 +102,21 @@ export default function NotificationBell({ user }: { user: User }) {
                         {notification.type === 'comment' && <MessageCircle className="w-2.5 h-2.5 text-white fill-current" />}
                         {notification.type === 'register' && <UserPlus className="w-2.5 h-2.5 text-white" />}
                         {notification.type === 'story_tag' && <AtSign className="w-2.5 h-2.5 text-white" />}
+                        {!['like', 'comment', 'register', 'story_tag'].includes(notification.type || '') && <Bell className="w-2.5 h-2.5 text-white" />}
                       </div>
                     </div>
                     
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-900 leading-snug">
-                        <span className="font-bold">{notification.from_user_name || notification.actor_name}</span>
+                        <span className="font-bold">{notification.from_user_name || notification.actor_name || 'Seseorang'}</span>
                         {notification.type === 'like' && ' menyukai postingan Anda.'}
                         {notification.type === 'comment' && ' mengomentari postingan Anda.'}
                         {notification.type === 'register' && ' mendaftar sebagai pengguna baru.'}
                         {notification.type === 'story_tag' && ' menandai Anda dalam cerita.'}
-                        {!['like', 'comment', 'register', 'story_tag'].includes(notification.type) && (notification.message || ' mengirim notifikasi.')}
+                        {!['like', 'comment', 'register', 'story_tag'].includes(notification.type || '') && (notification.message ? ` ${notification.message}` : ' mengirim notifikasi.')}
                       </p>
                       <p className="text-xs text-slate-500 mt-1">
-                        {formatDateWIB(notification.created_at)}
+                        {notification.created_at ? formatDateWIB(notification.created_at) : ''}
                       </p>
                     </div>
                   </Link>

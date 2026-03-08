@@ -1142,6 +1142,15 @@ export default function AdminDashboard({ user }: { user: User }) {
                   {post.image_url && (
                     <img src={post.image_url} alt="Post attachment" className="rounded-lg max-h-48 object-cover mb-2" />
                   )}
+                  {post.video_url && (
+                    <video src={post.video_url} controls className="rounded-lg max-h-48 object-cover mb-2 w-full" />
+                  )}
+                  {post.document_url && (
+                    <a href={post.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors mb-2">
+                      <FileText className="w-5 h-5 text-emerald-600" />
+                      <span className="text-sm font-medium text-slate-700 truncate">Dokumen Lampiran</span>
+                    </a>
+                  )}
                   {post.audio_url && (
                     <audio src={post.audio_url} controls className="w-full h-8 mb-2" />
                   )}
@@ -1338,6 +1347,8 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <option value="voter">Voter</option>
                     <option value="candidate">Kandidat</option>
                     <option value="admin">Admin</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="pengunjung">Pengunjung</option>
                   </select>
                 </div>
                 <div>
@@ -1460,6 +1471,8 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <option value="voter">Voter</option>
                     <option value="candidate">Kandidat</option>
                     <option value="admin">Admin</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="pengunjung">Pengunjung</option>
                   </select>
                 </div>
                 <div>

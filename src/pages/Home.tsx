@@ -186,7 +186,7 @@ export default function Home({ user }: { user: User }) {
 
   const handlePost = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newPost.trim() && !imageUrl && !audioUrl) return;
+    if (!newPost.trim() && !imageUrl && !audioUrl && !videoUrl && !documentUrl) return;
 
     let finalAudioUrl = null;
     if (audioBlob) {
@@ -227,11 +227,6 @@ export default function Home({ user }: { user: User }) {
   const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran gambar maksimal 5MB');
-        return;
-      }
-      
       try {
         const compressedUrl = await compressImage(file);
         setImageUrl(compressedUrl);
@@ -246,11 +241,6 @@ export default function Home({ user }: { user: User }) {
   const handleVideoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Ukuran video maksimal 10MB');
-        return;
-      }
-      
       const reader = new FileReader();
       reader.onloadend = () => {
         setVideoUrl(reader.result as string);
@@ -262,11 +252,6 @@ export default function Home({ user }: { user: User }) {
   const handleDocumentUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran dokumen maksimal 5MB');
-        return;
-      }
-      
       const reader = new FileReader();
       reader.onloadend = () => {
         setDocumentUrl(reader.result as string);
@@ -289,7 +274,7 @@ export default function Home({ user }: { user: User }) {
   };
 
   const handleLike = async (postId: string) => {
-    await likePost(postId, user.id);
+    // likePost is already handled in PostItem.tsx
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Memuat linimasa...</div>;

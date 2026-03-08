@@ -15,7 +15,7 @@ export interface User {
   avatar_position?: string;
   is_verified?: number;
   is_approved?: number;
-  role: 'admin' | 'candidate' | 'voter';
+  role: 'admin' | 'candidate' | 'voter' | 'moderator' | 'pengunjung';
   password?: string;
 }
 

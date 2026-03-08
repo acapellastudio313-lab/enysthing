@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import { User, Message, Conversation } from '../types';
-import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus, Paperclip, X, FileText, Image as ImageIcon, Video } from 'lucide-react';
+import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus, Paperclip, X, FileText, Image as ImageIcon, Video, Trash2, Check, CheckCheck } from 'lucide-react';
 import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB, compressImage } from '../utils';
 import { useLocation } from 'react-router-dom';
-import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead } from '../lib/db';
+import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead, deleteMessage } from '../lib/db';
 
 export default function Messages({ user }: { user: User }) {
   const location = useLocation();
@@ -74,17 +74,6 @@ export default function Messages({ user }: { user: User }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limits
-    if (file.type.startsWith('image/') && file.size > 5 * 1024 * 1024) {
-      alert('Maksimal 5MB untuk gambar'); return;
-    }
-    if (file.type.startsWith('video/') && file.size > 10 * 1024 * 1024) {
-      alert('Maksimal 10MB untuk video'); return;
-    }
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && file.size > 5 * 1024 * 1024) {
-       alert('Maksimal 5MB untuk dokumen'); return;
-    }
-
     let type: 'image' | 'video' | 'document' = 'document';
     if (file.type.startsWith('image/')) type = 'image';
     else if (file.type.startsWith('video/')) type = 'video';
@@ -123,6 +112,17 @@ export default function Messages({ user }: { user: User }) {
       } : undefined);
     } catch (err) {
       console.error('Failed to send message', err);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!selectedConversation) return;
+    if (window.confirm('Hapus pesan ini?')) {
+      try {
+        await deleteMessage(user.id, selectedConversation.id, messageId);
+      } catch (err) {
+        console.error('Failed to delete message', err);
+      }
     }
   };
 
@@ -292,7 +292,16 @@ export default function Messages({ user }: { user: User }) {
                         </span>
                       </div>
                     )}
-                    <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group`}>
+                      {isMe && (
+                        <button
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 rounded-full transition-all mr-2 self-center"
+                          title="Hapus Pesan"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       <div className={`max-w-[80%] sm:max-w-[70%] px-4 py-2 rounded-2xl text-sm shadow-sm ${
                         isMe 
                           ? 'bg-emerald-600 text-white rounded-tr-none' 
@@ -315,8 +324,17 @@ export default function Messages({ user }: { user: User }) {
                           </div>
                         )}
                         <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                        <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-emerald-100' : 'text-slate-400'}`}>
+                        <p className={`text-[9px] mt-1 flex items-center justify-end gap-1 ${isMe ? 'text-emerald-100' : 'text-slate-400'}`}>
                           {formatTimeWIB(msg.created_at)}
+                          {isMe && (
+                            <span className="ml-0.5" title={msg.is_read ? "Dibaca" : "Terkirim"}>
+                              {msg.is_read ? (
+                                <CheckCheck className="w-3 h-3 text-blue-400" />
+                              ) : (
+                                <CheckCheck className="w-3 h-3 text-white opacity-90" />
+                              )}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
