@@ -36,7 +36,13 @@ export default function Messages({ user }: { user: User }) {
   useEffect(() => {
     const init = async () => {
       const users = await getAllUsers();
-      setAllUsers(users.filter(u => u.id !== user.id));
+      // Ensure unique users by ID
+      const uniqueUsers = users.filter((u, index, self) => 
+        index === self.findIndex((t) => (
+          t.id === u.id
+        ))
+      );
+      setAllUsers(uniqueUsers.filter(u => u.id !== user.id));
       
       const unsubscribeConvs = listenToConversations(user.id, (convs) => {
         setConversations(convs);

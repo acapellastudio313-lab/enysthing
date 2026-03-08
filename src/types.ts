@@ -17,6 +17,7 @@ export interface User {
   is_approved?: number;
   role: 'admin' | 'candidate' | 'voter' | 'moderator' | 'pengunjung';
   password?: string;
+  lucky_number?: number;
 }
 
 export interface Candidate {
@@ -71,13 +72,8 @@ export interface Post {
   content: string;
   image_url: string | null;
   video_url?: string | null;
-  video_file_id?: string | null;
   document_url?: string | null;
-  document_file_id?: string | null;
   audio_url?: string | null;
-  audio_file_id?: string | null;
-  is_uploading?: boolean;
-  upload_progress?: number;
   is_pinned?: number;
   created_at: string;
   updated_at?: string;
@@ -132,7 +128,6 @@ export interface Message {
   receiver_id: string;
   text: string;
   attachment_url?: string;
-  attachment_file_id?: string;
   attachment_type?: 'image' | 'video' | 'document';
   created_at: string;
   is_read: number;

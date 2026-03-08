@@ -629,3 +629,60 @@ export const resetAllData = async () => {
     await batch.commit();
   }
 };
+
+// Lucky Number Functions
+export const triggerLuckyNumberEvent = async (type: 'random' | 'custom', customValue?: number) => {
+  const eventRef = doc(db, 'entertainment', 'lucky_number_event');
+  await setDoc(eventRef, {
+    type,
+    customValue: customValue || null,
+    status: 'rolling',
+    timestamp: Date.now()
+  });
+};
+
+export const assignLuckyNumbers = async (type: 'random' | 'custom', customValue?: number, pool?: { min: number, max: number }) => {
+  const usersSnap = await getDocs(collection(db, "users"));
+  const batch = writeBatch(db);
+  
+  const min = pool?.min || 1;
+  const max = pool?.max || 1000;
+
+  usersSnap.docs.forEach((userDoc) => {
+    const luckyNumber = type === 'random' ? Math.floor(Math.random() * (max - min + 1)) + min : customValue;
+    batch.update(userDoc.ref, { lucky_number: luckyNumber });
+  });
+  
+  await batch.commit();
+  
+  // Update event status to finished
+  await updateDoc(doc(db, 'entertainment', 'lucky_number_event'), {
+    status: 'finished'
+  });
+};
+
+export const updateUserLuckyNumber = async (userId: string, luckyNumber: number | null) => {
+  await updateDoc(doc(db, 'users', userId), { lucky_number: luckyNumber });
+};
+
+export const updateLuckyNumberPool = async (min: number, max: number) => {
+  await setDoc(doc(db, 'entertainment', 'lucky_number_pool'), { min, max });
+};
+
+export const listenToLuckyNumberPool = (callback: (pool: { min: number, max: number }) => void) => {
+  return onSnapshot(doc(db, 'entertainment', 'lucky_number_pool'), (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data() as { min: number, max: number });
+    } else {
+      callback({ min: 1, max: 100 });
+    }
+  });
+};
+
+export const listenToLuckyNumberEvent = (callback: (event: any) => void) => {
+  return onSnapshot(doc(db, 'entertainment', 'lucky_number_event'), (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data());
+    }
+  });
+};

@@ -335,15 +335,17 @@ function StoryViewer({
                   <p className="text-slate-400 text-center mt-4">Belum ada yang melihat cerita ini.</p>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {currentStory.views?.filter(v => v.id !== currentUser.id).map(viewer => (
-                      <div key={viewer.id} className="flex items-center gap-3">
-                        <img src={viewer.avatar} alt={viewer.name} className="w-10 h-10 rounded-full" />
-                        <div>
-                          <p className="text-white font-medium">{viewer.name}</p>
-                          <p className="text-slate-400 text-xs">{formatDateWIB(viewer.viewed_at)}</p>
+                    {currentStory.views?.filter(v => v.id !== currentUser.id)
+                      .filter((viewer, index, self) => index === self.findIndex(v => v.id === viewer.id))
+                      .map(viewer => (
+                        <div key={viewer.id} className="flex items-center gap-3">
+                          <img src={viewer.avatar} alt={viewer.name} className="w-10 h-10 rounded-full" />
+                          <div>
+                            <p className="text-white font-medium">{viewer.name}</p>
+                            <p className="text-slate-400 text-xs">{formatDateWIB(viewer.viewed_at)}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 )}
               </div>
@@ -412,7 +414,9 @@ export default function Stories({ user }: { user: User }) {
         groups[story.user_id].stories.push(story);
       });
       
-      setStoryGroups(Object.values(groups));
+      // Ensure unique groups by user_id
+      const finalGroups = Object.values(groups);
+      setStoryGroups(finalGroups);
     });
 
     return () => unsubscribe();
