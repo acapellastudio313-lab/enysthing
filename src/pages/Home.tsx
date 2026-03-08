@@ -1,22 +1,26 @@
 import { useState, useEffect, FormEvent, useRef, ChangeEvent } from 'react';
 import { User, Post } from '../types';
-import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock, Video, FileText } from 'lucide-react';
+import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock, Video, FileText, Loader2 } from 'lucide-react';
 import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
 import { formatDateWIB, compressImage } from '../utils';
-import { createPost, listenToPosts, listenToSettings, likePost, pinPost } from '../lib/db';
+import { createPost, listenToPosts, listenToSettings, likePost, pinPost, uploadFileChunks } from '../lib/db';
+import { toast } from 'sonner';
 
 export default function Home({ user }: { user: User }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [imageUrl, setImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -186,8 +190,9 @@ export default function Home({ user }: { user: User }) {
 
   const handlePost = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newPost.trim() && !imageUrl && !audioUrl && !videoUrl && !documentUrl) return;
+    if (!newPost.trim() && !imageUrl && !audioUrl && !videoFile && !documentFile) return;
 
+    setIsSubmitting(true);
     let finalAudioUrl = null;
     if (audioBlob) {
       // Convert blob to base64
@@ -201,12 +206,27 @@ export default function Home({ user }: { user: User }) {
     const finalImageUrl = imageUrl || (showImageInput && !imageUrl ? `https://picsum.photos/seed/${Math.random()}/800/600` : null);
 
     try {
+      let videoFileId = null;
+      let documentFileId = null;
+
+      if (videoFile) {
+        toast.info('Mengunggah video... Mohon tunggu');
+        videoFileId = await uploadFileChunks(videoFile);
+      }
+
+      if (documentFile) {
+        toast.info('Mengunggah dokumen... Mohon tunggu');
+        documentFileId = await uploadFileChunks(documentFile);
+      }
+
       await createPost({ 
         author_id: user.id, 
         content: newPost, 
         image_url: finalImageUrl,
-        video_url: videoUrl,
-        document_url: documentUrl,
+        video_url: null, // We use file ID now
+        video_file_id: videoFileId,
+        document_url: null, // We use file ID now
+        document_file_id: documentFileId,
         audio_url: finalAudioUrl
       });
 
@@ -214,13 +234,18 @@ export default function Home({ user }: { user: User }) {
       setImageUrl('');
       setShowImageInput(false);
       setVideoUrl(null);
+      setVideoFile(null);
       setDocumentUrl(null);
+      setDocumentFile(null);
       setDocumentName(null);
       setAudioBlob(null);
       setAudioUrl(null);
+      toast.success('Postingan berhasil dibuat!');
     } catch (error) {
       console.error('Error creating post:', error);
-      alert('Gagal membuat postingan');
+      toast.error('Gagal membuat postingan');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -241,13 +266,8 @@ export default function Home({ user }: { user: User }) {
   const handleVideoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Check file size (max 1MB for Firestore compatibility)
-      if (file.size > 1024 * 1024) {
-        alert('Ukuran video terlalu besar (maks 1MB). Silakan pilih video yang lebih kecil.');
-        if (videoInputRef.current) videoInputRef.current.value = '';
-        return;
-      }
-
+      // No size limit check here as requested
+      setVideoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setVideoUrl(reader.result as string);
@@ -263,12 +283,10 @@ export default function Home({ user }: { user: User }) {
   const handleDocumentUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setDocumentUrl(reader.result as string);
-        setDocumentName(file.name);
-      };
-      reader.readAsDataURL(file);
+      setDocumentFile(file);
+      setDocumentName(file.name);
+      // Preview only
+      setDocumentUrl('preview'); 
     }
   };
 

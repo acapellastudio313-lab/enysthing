@@ -71,7 +71,9 @@ export interface Post {
   content: string;
   image_url: string | null;
   video_url?: string | null;
+  video_file_id?: string | null;
   document_url?: string | null;
+  document_file_id?: string | null;
   audio_url?: string | null;
   is_pinned?: number;
   created_at: string;

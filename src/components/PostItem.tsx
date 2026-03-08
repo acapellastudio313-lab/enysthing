@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { User, Post, Comment } from '../types';
-import { Heart, MessageCircle, Share2, Send, CheckCircle, X, Pin, Edit, Trash2, FileText, Video } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Send, CheckCircle, X, Pin, Edit, Trash2, FileText, Video, Loader2 } from 'lucide-react';
 import { formatDateWIB } from '../utils';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import EditPostModal from './EditPostModal';
 import { toast } from 'sonner';
-import { addComment, listenToComments, likePost, checkIsLiked, deletePost, deleteComment, updateComment, getPostLikers } from '../lib/db';
+import { addComment, listenToComments, likePost, checkIsLiked, deletePost, deleteComment, updateComment, getPostLikers, getFileFromChunks } from '../lib/db';
 
 interface PostItemProps {
   key?: number | string;
@@ -36,6 +36,28 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
   const [showLikers, setShowLikers] = useState(false);
   const [likers, setLikers] = useState<User[]>([]);
   const [, setTick] = useState(0);
+
+  const [videoSrc, setVideoSrc] = useState<string | null>(post.video_url || null);
+  const [documentSrc, setDocumentSrc] = useState<string | null>(post.document_url || null);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+
+  useEffect(() => {
+    const loadMedia = async () => {
+      if (post.video_file_id && !videoSrc) {
+        setIsLoadingMedia(true);
+        const url = await getFileFromChunks(post.video_file_id);
+        if (url) setVideoSrc(url);
+        setIsLoadingMedia(false);
+      }
+      if (post.document_file_id && !documentSrc) {
+        setIsLoadingMedia(true);
+        const url = await getFileFromChunks(post.document_file_id);
+        if (url) setDocumentSrc(url);
+        setIsLoadingMedia(false);
+      }
+    };
+    loadMedia();
+  }, [post.video_file_id, post.document_file_id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -189,38 +211,56 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
             </div>
           )}
 
-          {post.video_url && (
-            <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-black">
-              <video 
-                src={post.video_url} 
-                controls 
-                playsInline
-                preload="metadata"
-                className="w-full h-auto max-h-[500px]" 
-                onError={(e) => {
-                  console.error("Video playback error", e);
-                  toast.error("Gagal memutar video. Format mungkin tidak didukung atau file rusak.");
-                }}
-              />
+          {(videoSrc || post.video_file_id) && (
+            <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-black relative min-h-[200px] flex items-center justify-center">
+              {!videoSrc && isLoadingMedia ? (
+                <div className="text-white flex flex-col items-center gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                  <span className="text-xs">Memuat video...</span>
+                </div>
+              ) : videoSrc ? (
+                <video 
+                  src={videoSrc} 
+                  controls 
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-auto max-h-[500px]" 
+                  onError={(e) => {
+                    console.error("Video playback error", e);
+                    toast.error("Gagal memutar video. Format mungkin tidak didukung atau file rusak.");
+                  }}
+                />
+              ) : (
+                <div className="text-white text-sm">Gagal memuat video</div>
+              )}
             </div>
           )}
 
-          {post.document_url && (
+          {(documentSrc || post.document_file_id) && (
             <div className="mt-3">
-              <a 
-                href={post.document_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
-              >
-                <div className="p-2 bg-white rounded-lg border border-slate-200">
-                  <FileText className="w-6 h-6 text-slate-500" />
+              {(!documentSrc && isLoadingMedia) ? (
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                  <span className="text-sm text-slate-500">Memuat dokumen...</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-slate-900 truncate">Dokumen Lampiran</p>
-                  <p className="text-xs text-slate-500">Klik untuk melihat</p>
-                </div>
-              </a>
+              ) : documentSrc ? (
+                <a 
+                  href={documentSrc} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
+                >
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <FileText className="w-6 h-6 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900 truncate">Dokumen Lampiran</p>
+                    <p className="text-xs text-slate-500">Klik untuk melihat</p>
+                  </div>
+                </a>
+              ) : (
+                <div className="text-sm text-red-500">Gagal memuat dokumen</div>
+              )}
             </div>
           )}
 

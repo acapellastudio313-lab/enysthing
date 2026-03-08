@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
 import { User } from './types';
@@ -18,6 +18,7 @@ import Login from './pages/Login';
 import Messages from './pages/Messages';
 import AdminDashboard from './pages/AdminDashboard';
 import Entertainment from './pages/Entertainment';
+import ScrollToTop from './components/ScrollToTop';
 import { Megaphone, X as CloseIcon } from 'lucide-react';
 import { getUser, listenToSettings, listenToNotifications, initAdmin } from './lib/db';
 
@@ -116,7 +117,8 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
+    <>
+      <ScrollToTop />
       <NotificationHandler user={user} />
       <GlobalNotification />
       <Toaster position="top-right" richColors closeButton />
@@ -148,6 +150,6 @@ export default function App() {
           </div>
         </div>
       )}
-    </BrowserRouter>
+    </>
   );
 }

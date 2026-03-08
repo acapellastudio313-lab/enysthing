@@ -57,6 +57,81 @@ export const updateSetting = async (key: string, value: string) => {
   await setDoc(doc(db, "settings", key), { value });
 };
 
+// File Chunking Helpers
+const CHUNK_SIZE = 400 * 1024; // 400KB chunks to be safe (Firestore limit is 1MB)
+
+export const uploadFileChunks = async (file: File): Promise<string> => {
+  const fileId = doc(collection(db, "file_metadata")).id; // Generate ID
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  
+  // Convert file to base64 first
+  const base64Data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+  });
+
+  // The base64 string contains metadata "data:video/mp4;base64,...", we need to keep it for reconstruction
+  // But splitting it is fine as long as we reassemble it exactly.
+  
+  const batch = writeBatch(db);
+  
+  // Create metadata doc
+  const metadataRef = doc(db, "file_metadata", fileId);
+  batch.set(metadataRef, {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    total_chunks: totalChunks,
+    created_at: serverTimestamp()
+  });
+
+  // Create chunks
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, base64Data.length);
+    const chunk = base64Data.slice(start, end);
+    
+    const chunkRef = doc(db, "file_chunks", `${fileId}_${i}`);
+    batch.set(chunkRef, {
+      file_id: fileId,
+      index: i,
+      data: chunk
+    });
+  }
+
+  await batch.commit();
+  return fileId;
+};
+
+export const getFileFromChunks = async (fileId: string): Promise<string | null> => {
+  try {
+    // Get metadata to know how many chunks to expect (optional validation)
+    const metadataSnap = await getDoc(doc(db, "file_metadata", fileId));
+    if (!metadataSnap.exists()) return null;
+    
+    const totalChunks = metadataSnap.data().total_chunks;
+    
+    // Get all chunks
+    const q = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return null;
+
+    // Sort by index
+    const chunks = querySnapshot.docs
+      .map(doc => doc.data())
+      .sort((a, b) => a.index - b.index);
+      
+    // Reassemble
+    return chunks.map(c => c.data).join('');
+  } catch (error) {
+    console.error("Error reassembling file:", error);
+    return null;
+  }
+};
+
 // Posts
 export const createPost = async (postData: any) => {
   const docRef = await addDoc(collection(db, "posts"), {
@@ -64,7 +139,9 @@ export const createPost = async (postData: any) => {
     content: postData.content,
     image_url: postData.image_url || null,
     video_url: postData.video_url || null,
+    video_file_id: postData.video_file_id || null, // Add this
     document_url: postData.document_url || null,
+    document_file_id: postData.document_file_id || null, // Add this
     audio_url: postData.audio_url || null,
     created_at: serverTimestamp(),
     likes_count: 0,
