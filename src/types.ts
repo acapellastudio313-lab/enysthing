@@ -129,6 +129,7 @@ export interface Message {
   receiver_id: string;
   text: string;
   attachment_url?: string;
+  attachment_file_id?: string;
   attachment_type?: 'image' | 'video' | 'document';
   created_at: string;
   is_read: number;

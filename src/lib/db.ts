@@ -132,6 +132,24 @@ export const getFileFromChunks = async (fileId: string): Promise<string | null> 
   }
 };
 
+export const deleteFileChunks = async (fileId: string) => {
+  try {
+    const batch = writeBatch(db);
+    
+    // Delete metadata
+    batch.delete(doc(db, "file_metadata", fileId));
+    
+    // Delete chunks
+    const q = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
+    const querySnapshot = await getDocs(q);
+    querySnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    
+    await batch.commit();
+  } catch (error) {
+    console.error("Error deleting file chunks:", error);
+  }
+};
+
 // Posts
 export const createPost = async (postData: any) => {
   const docRef = await addDoc(collection(db, "posts"), {
@@ -385,7 +403,14 @@ export const updatePost = async (postId: string, data: any) => {
 };
 
 export const deletePost = async (postId: string) => {
-  await deleteDoc(doc(db, "posts", postId));
+  const postRef = doc(db, "posts", postId);
+  const postSnap = await getDoc(postRef);
+  if (postSnap.exists()) {
+    const data = postSnap.data();
+    if (data.video_file_id) await deleteFileChunks(data.video_file_id);
+    if (data.document_file_id) await deleteFileChunks(data.document_file_id);
+  }
+  await deleteDoc(postRef);
 };
 
 export const deleteComment = async (postId: string, commentId: string) => {
@@ -571,13 +596,14 @@ export const listenToMessages = (userId: string, otherUserId: string, callback: 
   });
 };
 
-export const sendMessage = async (userId: string, otherUserId: string, text: string, attachment?: { url: string, type: 'image' | 'video' | 'document' }) => {
+export const sendMessage = async (userId: string, otherUserId: string, text: string, attachment?: { url: string | null, type: 'image' | 'video' | 'document', file_id?: string | null }) => {
   const conversationId = [userId, otherUserId].sort().join("_");
   const messageData = {
     sender_id: userId,
     receiver_id: otherUserId,
     text,
     attachment_url: attachment?.url || null,
+    attachment_file_id: attachment?.file_id || null,
     attachment_type: attachment?.type || null,
     is_read: false,
     created_at: serverTimestamp(),
