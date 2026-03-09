@@ -2,6 +2,59 @@ import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, dele
 import { db } from "./firebase";
 import { User, Post, Comment, Story, Candidate, LeaderboardEntry, Conversation, Message, Notification } from "../types";
 
+/**
+ * Reassembles a file from its chunks stored in Firestore.
+ * @param fileId The ID of the file metadata
+ * @returns A Blob URL representing the reassembled file
+ */
+export async function getFileFromChunks(fileId: string): Promise<string | null> {
+  if (!fileId) return null;
+  try {
+    const metadataSnap = await getDoc(doc(db, "file_metadata", fileId));
+    if (!metadataSnap.exists()) {
+      console.error(`Metadata for file ${fileId} not found`);
+      return null;
+    }
+    
+    const { total_chunks, type } = metadataSnap.data();
+    
+    // Fetch all chunks for this file
+    const chunksQuery = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
+    const chunksSnapshot = await getDocs(chunksQuery);
+    
+    if (chunksSnapshot.size < total_chunks) {
+      console.warn(`File ${fileId} incomplete: ${chunksSnapshot.size}/${total_chunks} chunks.`);
+      return null;
+    }
+
+    // Sort chunks by their index to ensure correct order
+    const sortedChunks = chunksSnapshot.docs
+      .map(d => d.data())
+      .sort((a, b) => a.index - b.index);
+      
+    // Combine all chunk data strings
+    const combinedBase64 = sortedChunks.map(c => c.data).join('');
+    
+    // Extract actual base64 content (remove data:mime/type;base64, prefix)
+    const base64Parts = combinedBase64.split(',');
+    const actualData = base64Parts.length > 1 ? base64Parts[1] : base64Parts[0];
+
+    // Convert base64 to binary data
+    const binaryString = atob(actualData);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // Create a Blob and return its local URL
+    const fileBlob = new Blob([bytes], { type: type || 'application/octet-stream' });
+    return URL.createObjectURL(fileBlob);
+  } catch (err) {
+    console.error("Critical error in getFileFromChunks:", err);
+    return null;
+  }
+}
+
 // User Functions
 export const getUser = async (id: string): Promise<User | null> => {
   const docRef = doc(db, "users", id);
@@ -109,49 +162,6 @@ export const uploadFileChunks = async (file: File, onProgress?: (progress: numbe
   }
 
   return fileId;
-};
-
-export const getFileFromChunks = async (fileId: string): Promise<string | null> => {
-  try {
-    const metadataSnap = await getDoc(doc(db, "file_metadata", fileId));
-    if (!metadataSnap.exists()) return null;
-    
-    const { total_chunks, type } = metadataSnap.data();
-    
-    // Get all chunks
-    const q = query(collection(db, "file_chunks"), where("file_id", "==", fileId));
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.size < total_chunks) {
-      console.warn(`File ${fileId} is incomplete: ${querySnapshot.size}/${total_chunks} chunks found.`);
-      return null;
-    }
-
-    // Sort by index
-    const chunks = querySnapshot.docs
-      .map(doc => doc.data())
-      .sort((a, b) => a.index - b.index);
-      
-    // Reassemble base64 string
-    const fullBase64 = chunks.map(c => c.data).join('');
-    
-    // Convert base64 to Blob for better performance and reliability
-    const base64Content = fullBase64.split(',')[1];
-    if (!base64Content) return fullBase64; // Fallback if no prefix
-
-    const byteCharacters = atob(base64Content);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: type || 'application/octet-stream' });
-    
-    return URL.createObjectURL(blob);
-  } catch (error) {
-    console.error("Error reassembling file:", error);
-    return null;
-  }
 };
 
 export const deleteFileChunks = async (fileId: string) => {
