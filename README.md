@@ -1,20 +1,11 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Enysthing App
 
-# Run and deploy your AI Studio app
+This repository contains the source code for the Enysthing application.
 
-This contains everything you need to run your app locally.
+## Deployment
+This project is configured to be deployed on Vercel.
+- The `vercel.json` file handles SPA routing.
+- The `src/lib/db.ts` file contains the database logic.
+- The `src/lib/firebase.ts` file contains the Firebase configuration.
 
-View your app in AI Studio: https://ai.studio/apps/87750233-b3f1-4f10-bae4-daa2e9096152
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+*Last updated: 2026-03-08 to fix Vercel build errors.*

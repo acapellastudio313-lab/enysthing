@@ -75,6 +75,7 @@ function NotificationHandler({ user }: { user: User }) {
   return null;
 }
 
+// Force Vercel Sync 2026-03-08
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
