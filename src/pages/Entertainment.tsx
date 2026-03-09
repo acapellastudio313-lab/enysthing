@@ -4,20 +4,40 @@ import { User } from '../types';
 import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, deleteDoc, serverTimestamp, query, where, orderBy, writeBatch } from 'firebase/firestore';
-import { getAllUsers, listenToSettings } from '../lib/db';
+import { getAllUsers, listenToSettings, notifyAllUsers } from '../lib/db';
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 
 export default function Entertainment({ user }: { user: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as 'kuis' | 'spin' | 'number') || 'kuis';
-  const [electionStatus, setElectionStatus] = useState('not_started');
+  
+  const [isQuizActive, setIsQuizActive] = useState(false);
+  const [isSpinActive, setIsSpinActive] = useState(false);
+  const [isNumberActive, setIsNumberActive] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = listenToSettings((settings) => {
-      setElectionStatus(settings.election_status || 'not_started');
+    const unsubQuiz = onSnapshot(doc(db, 'entertainment', 'quiz'), (docSnap) => {
+      if (docSnap.exists()) {
+        setIsQuizActive(docSnap.data().status === 'active');
+      }
     });
-    return () => unsubscribe();
+    const unsubSpin = onSnapshot(doc(db, 'entertainment', 'spin'), (docSnap) => {
+      if (docSnap.exists()) {
+        setIsSpinActive(docSnap.data().isSpinning === true);
+      }
+    });
+    const unsubNumber = onSnapshot(doc(db, 'entertainment', 'number'), (docSnap) => {
+      if (docSnap.exists()) {
+        setIsNumberActive(docSnap.data().isGenerating === true);
+      }
+    });
+
+    return () => {
+      unsubQuiz();
+      unsubSpin();
+      unsubNumber();
+    };
   }, []);
 
   const setActiveTab = (tab: 'kuis' | 'spin' | 'number') => {
@@ -25,7 +45,6 @@ export default function Entertainment({ user }: { user: User }) {
   };
 
   const isAdminOrMod = user.role === 'admin' || user.role === 'moderator';
-  const showBadge = electionStatus === 'in_progress' || electionStatus === 'closed';
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-20 md:pb-0">
@@ -41,7 +60,7 @@ export default function Entertainment({ user }: { user: User }) {
             <div className="flex items-center gap-2 relative">
               <HelpCircle className="w-4 h-4" />
               Kuis Interaktif
-              {showBadge && (
+              {isQuizActive && (
                 <span className="absolute -top-1 -right-2 flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
@@ -62,7 +81,7 @@ export default function Entertainment({ user }: { user: User }) {
             <div className="flex items-center gap-2 relative">
               <RefreshCw className="w-4 h-4" />
               Putaran Bebas
-              {showBadge && (
+              {isSpinActive && (
                 <span className="absolute -top-1 -right-2 flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
@@ -83,7 +102,7 @@ export default function Entertainment({ user }: { user: User }) {
             <div className="flex items-center gap-2 relative">
               <Hash className="w-4 h-4" />
               Dapatkan Nomor
-              {showBadge && (
+              {isNumberActive && (
                 <span className="absolute -top-1 -right-2 flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
@@ -233,6 +252,14 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
       lastUpdated: Date.now()
     });
 
+    await notifyAllUsers({
+      type: 'system',
+      message: 'Pengacakan nomor sedang berlangsung! Cek nomor Anda sekarang di menu Dapatkan Nomor.',
+      actor_name: 'Sistem',
+      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
+      link: '/entertainment?tab=number'
+    });
+
     // Reset generating flag after animation duration
     setTimeout(() => {
       updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
@@ -292,6 +319,14 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
       lastUpdated: Date.now()
     });
     
+    await notifyAllUsers({
+      type: 'system',
+      message: `Nomor custom untuk @${username} telah diset! Cek di menu Dapatkan Nomor.`,
+      actor_name: 'Sistem',
+      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
+      link: '/entertainment?tab=number'
+    });
+
     // Reset generating flag after animation duration
     setTimeout(() => {
       updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
@@ -630,6 +665,14 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       currentQuestionIndex: 0,
       endTime: Date.now() + (firstQ.timeLimit * 1000)
     });
+
+    await notifyAllUsers({
+      type: 'system',
+      message: 'Kuis Interaktif telah dimulai! Ayo bergabung dan jawab pertanyaannya di menu Hiburan.',
+      actor_name: 'Sistem',
+      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
+      link: '/entertainment?tab=kuis'
+    });
   };
 
   const handleNextQuestion = async () => {
@@ -645,6 +688,14 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       await updateDoc(doc(db, 'entertainment', 'quiz'), {
         status: 'finished',
         endTime: null
+      });
+
+      await notifyAllUsers({
+        type: 'system',
+        message: 'Kuis Interaktif telah selesai! Cek hasilnya sekarang di menu Hiburan.',
+        actor_name: 'Sistem',
+        actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff',
+        link: '/entertainment?tab=kuis'
       });
     }
   };
@@ -694,6 +745,14 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       status: 'waiting',
       currentQuestionIndex: 0,
       endTime: null
+    });
+
+    await notifyAllUsers({
+      type: 'system',
+      message: 'Kuis Interaktif telah dihentikan.',
+      actor_name: 'Sistem',
+      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff',
+      link: '/entertainment?tab=kuis'
     });
   };
 

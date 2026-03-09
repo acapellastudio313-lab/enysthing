@@ -1,7 +1,7 @@
 import { User } from '../types';
 import { useState, FormEvent, useEffect } from 'react';
 import { Loader2, LogIn, UserPlus } from 'lucide-react';
-import { getUserByUsername, getSettings, createUser } from '../lib/db';
+import { getUserByUsername, getSettings, createUser, notifyAdmins } from '../lib/db';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -114,6 +114,27 @@ export default function Login({ onLogin }: LoginProps) {
         return;
       }
 
+      // Capture IP and GPS
+      let ip = 'Unknown';
+      try {
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResponse.json();
+        ip = ipData.ip;
+      } catch (e) {
+        console.error('Failed to get IP');
+      }
+
+      let latitude, longitude;
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject);
+        });
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+      } catch (e) {
+        console.error('GPS permission denied or not available');
+      }
+
       // Create new user
       await createUser({
         name,
@@ -124,7 +145,18 @@ export default function Login({ onLogin }: LoginProps) {
         is_verified: 0, // No verification icon by default
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
         join_date: new Date().toISOString(),
-        bio: 'Pengguna Baru'
+        bio: 'Pengguna Baru',
+        ip_address: ip,
+        latitude,
+        longitude
+      });
+
+      await notifyAdmins({
+        type: 'register',
+        message: `Pengguna baru mendaftar: ${name} (@${username})`,
+        actor_name: name,
+        actor_avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
+        link: '/admin/users'
       });
 
       setSuccess('Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan admin.');

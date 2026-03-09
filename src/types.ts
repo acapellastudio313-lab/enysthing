@@ -10,6 +10,9 @@ export interface User {
   cover_url?: string;
   bio?: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
+  ip_address?: string;
   join_date?: string;
   cover_position?: string;
   avatar_position?: string;
@@ -74,6 +77,11 @@ export interface Post {
   video_url?: string | null;
   document_url?: string | null;
   audio_url?: string | null;
+  video_file_id?: string;
+  document_file_id?: string;
+  audio_file_id?: string;
+  is_uploading?: boolean;
+  upload_progress?: number;
   is_pinned?: number;
   created_at: string;
   updated_at?: string;

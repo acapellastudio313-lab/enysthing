@@ -8,6 +8,8 @@ import RightSidebar from './RightSidebar';
 import NotificationBell from './NotificationBell';
 import { useState, useEffect } from 'react';
 import { listenToSettings, listenToConversations } from '../lib/db';
+import { onSnapshot, doc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface LayoutProps {
   children: ReactNode;
@@ -36,10 +38,38 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
   const [branding, setBranding] = useState({ name: 'Agen Perubahan', subtitle: 'Aplikasi Pemilihan', icon: 'PA', logo: '' });
   const [isNavHidden, setIsNavHidden] = useState(false);
   const [electionStatus, setElectionStatus] = useState('not_started');
+  
+  const [isQuizActive, setIsQuizActive] = useState(false);
+  const [isSpinActive, setIsSpinActive] = useState(false);
+  const [isNumberActive, setIsNumberActive] = useState(false);
 
   useEffect(() => {
     setIsNavHidden(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const unsubQuiz = onSnapshot(doc(db, 'entertainment', 'quiz'), (docSnap) => {
+      if (docSnap.exists()) {
+        setIsQuizActive(docSnap.data().status === 'active');
+      }
+    });
+    const unsubSpin = onSnapshot(doc(db, 'entertainment', 'spin'), (docSnap) => {
+      if (docSnap.exists()) {
+        setIsSpinActive(docSnap.data().isSpinning === true);
+      }
+    });
+    const unsubNumber = onSnapshot(doc(db, 'entertainment', 'number'), (docSnap) => {
+      if (docSnap.exists()) {
+        setIsNumberActive(docSnap.data().isGenerating === true);
+      }
+    });
+
+    return () => {
+      unsubQuiz();
+      unsubSpin();
+      unsubNumber();
+    };
+  }, []);
 
   useEffect(() => {
     const handleToggleNav = (e: any) => {
@@ -109,7 +139,13 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
 
           <nav className="flex-1 space-y-2">
             {navItems.filter(item => !item.mobileOnly).map((item) => {
-              const showBadge = (item.to === '/candidates' || item.to === '/entertainment') && (electionStatus === 'in_progress' || electionStatus === 'closed');
+              let showBadge = false;
+              if (item.to === '/candidates') {
+                showBadge = electionStatus === 'in_progress';
+              } else if (item.to === '/entertainment') {
+                showBadge = isQuizActive || isSpinActive || isNumberActive;
+              }
+              
               return (
                 <NavLink
                   key={item.to}
@@ -210,7 +246,13 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
       {!isNavHidden && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-2 z-50 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
           {navItems.map((item) => {
-            const showBadge = (item.to === '/candidates' || item.to === '/entertainment') && (electionStatus === 'in_progress' || electionStatus === 'closed');
+            let showBadge = false;
+            if (item.to === '/candidates') {
+              showBadge = electionStatus === 'in_progress';
+            } else if (item.to === '/entertainment') {
+              showBadge = isQuizActive || isSpinActive || isNumberActive;
+            }
+            
             return (
               <NavLink
                 key={item.to}

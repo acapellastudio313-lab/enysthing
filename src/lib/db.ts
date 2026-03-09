@@ -510,6 +510,27 @@ export const notifyAllUsers = async (notificationData: any) => {
   }
 };
 
+export const notifyAdmins = async (notificationData: any) => {
+  try {
+    const adminsQuery = query(collection(db, "users"), where("role", "==", "admin"));
+    const adminsSnapshot = await getDocs(adminsQuery);
+    const batch = writeBatch(db);
+    
+    adminsSnapshot.docs.forEach(adminDoc => {
+      const notifRef = doc(collection(adminDoc.ref, "notifications"));
+      batch.set(notifRef, {
+        ...notificationData,
+        user_id: adminDoc.id,
+        created_at: serverTimestamp(),
+        is_read: 0
+      });
+    });
+    await batch.commit();
+  } catch (error) {
+    console.error("Error notifying admins:", error);
+  }
+};
+
 export const updatePost = async (postId: string, data: any) => {
   await updateDoc(doc(db, "posts", postId), data);
 };

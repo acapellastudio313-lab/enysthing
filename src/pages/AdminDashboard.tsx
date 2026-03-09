@@ -368,14 +368,16 @@ export default function AdminDashboard({ user }: { user: User }) {
           type: 'system',
           message: 'Pemilihan telah dimulai! Silakan berikan suara Anda di menu Kandidat.',
           actor_name: 'Sistem',
-          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff'
+          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
+          link: '/candidates'
         });
       } else if (status === 'closed') {
         await notifyAllUsers({
           type: 'system',
           message: 'Pemilihan telah ditutup! Cek hasil akhir di menu Klasemen.',
           actor_name: 'Sistem',
-          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff'
+          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff',
+          link: '/leaderboard'
         });
       }
 
@@ -472,6 +474,27 @@ export default function AdminDashboard({ user }: { user: User }) {
       setStats(s);
     } catch (err) {
       console.error('Failed to update role', err);
+    }
+  };
+
+  const handleApproveAll = async () => {
+    if (!window.confirm('Apakah Anda yakin ingin menyetujui semua pengguna baru?')) return;
+    
+    try {
+      const batch = writeBatch(db);
+      users.forEach(u => {
+        if (u.role === 'voter' && u.is_approved === 0) {
+          batch.update(doc(db, 'users', u.id), { is_approved: 1 });
+        }
+      });
+      await batch.commit();
+      toast.success('Semua pengguna baru telah disetujui');
+      // Refresh users list
+      const updatedUsers = await getAllUsers();
+      setUsers(updatedUsers);
+    } catch (error) {
+      console.error('Error approving all users:', error);
+      toast.error('Gagal menyetujui pengguna');
     }
   };
 
@@ -1225,18 +1248,27 @@ export default function AdminDashboard({ user }: { user: User }) {
           <div className="overflow-x-auto">
             <div className="p-4 bg-slate-50 flex justify-between items-center border-b border-slate-200">
               <h3 className="font-bold text-slate-900">Daftar Pengguna</h3>
-              <button
-                onClick={() => setIsAddingUser(true)}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm flex items-center gap-2"
-              >
-                <UserPlus className="w-4 h-4" /> Tambah Pengguna
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleApproveAll}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" /> Setujui Semua
+                </button>
+                <button
+                  onClick={() => setIsAddingUser(true)}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" /> Tambah Pengguna
+                </button>
+              </div>
             </div>
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3">Pengguna</th>
                   <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">IP Address</th>
                   <th className="px-4 py-3 text-right">Aksi</th>
                 </tr>
               </thead>
@@ -1265,6 +1297,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                         {u.role === 'admin' ? 'Admin' : u.role === 'candidate' ? 'Kandidat' : 'Voter'}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{u.ip_address || '-'}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
                         <button

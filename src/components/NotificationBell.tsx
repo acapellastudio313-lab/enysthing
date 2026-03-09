@@ -81,7 +81,7 @@ export default function NotificationBell({ user }: { user: User }) {
               ) : (
                 notifications.map((notification) => (
                   <Link 
-                    to={notification.type === 'register' ? `/admin/users` : notification.type === 'story_tag' ? '/' : (notification.post_id ? `/post/${notification.post_id}` : '/')} 
+                    to={notification.link ? notification.link : (notification.type === 'register' ? `/admin/users` : notification.type === 'story_tag' ? '/' : (notification.post_id ? `/post/${notification.post_id}` : '/'))} 
                     key={notification.id} 
                     onClick={() => setIsOpen(false)}
                     className={clsx(
