@@ -4,6 +4,8 @@ import { User, Post, Candidate, ElectionStatus } from '../types';
 import { Trash2, Shield, UserCheck, Users, FileText, BarChart2, AlertTriangle, Edit3, CheckCircle, X, Trophy, Clock, RefreshCw, RotateCcw, Loader2, UserPlus } from 'lucide-react';
 import { formatDateWIB } from '../utils';
 import { toast } from 'sonner';
+import { writeBatch, doc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { 
   getStats, 
   getAllUsers, 
@@ -23,15 +25,13 @@ import {
   createUser,
   getCandidateVoters,
   uploadBase64ToStorage,
-  notifyAllUsers,
-  getVisitors
+  notifyAllUsers
 } from '../lib/db';
 import { compressImage } from '../utils';
 
 export default function AdminDashboard({ user }: { user: User }) {
   const [stats, setStats] = useState({ users: 0, posts: 0, votes: 0, candidates: 0 });
   const [users, setUsers] = useState<User[]>([]);
-  const [visitors, setVisitors] = useState<any[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -104,6 +104,7 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null | 'new'>(null);
   const [candidateForm, setCandidateForm] = useState({ name: '', username: '', avatar: '', vision: '', mission: '', innovation_program: '', image_url: '' });
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
 
   const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
@@ -128,9 +129,6 @@ export default function AdminDashboard({ user }: { user: User }) {
       
       const l = await getLeaderboard();
       setLeaderboard(l);
-
-      const v = await getVisitors();
-      setVisitors(v);
     };
 
     fetchData();
@@ -482,13 +480,53 @@ export default function AdminDashboard({ user }: { user: User }) {
     }
   };
 
+  const handleBulkDeleteCandidates = async () => {
+    if (selectedCandidateIds.length === 0) return;
+    if (!confirm(`Hapus ${selectedCandidateIds.length} kandidat?`)) return;
+    try {
+      const batch = writeBatch(db);
+      selectedCandidateIds.forEach(id => {
+        const candidate = candidates.find(c => c.id === id);
+        if (candidate) {
+          batch.delete(doc(db, 'candidates', id));
+          batch.update(doc(db, 'users', candidate.user_id), { role: 'voter' });
+        }
+      });
+      await batch.commit();
+      toast.success('Kandidat berhasil dihapus');
+      fetchCandidates();
+      setSelectedCandidateIds([]);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghapus kandidat');
+    }
+  };
+
+  const handleBulkUpdateRole = async (role: string) => {
+    if (selectedUserIds.length === 0) return;
+    if (!confirm(`Ubah role ${selectedUserIds.length} pengguna menjadi ${role}?`)) return;
+    try {
+      const batch = writeBatch(db);
+      selectedUserIds.forEach(id => {
+        batch.update(doc(db, 'users', id), { role });
+      });
+      await batch.commit();
+      toast.success('Role berhasil diubah');
+      fetchUsers();
+      setSelectedUserIds([]);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal mengubah role');
+    }
+  };
+
   const handleApproveAll = async () => {
     if (!window.confirm('Apakah Anda yakin ingin menyetujui semua pengguna baru?')) return;
     
     try {
       const batch = writeBatch(db);
       users.forEach(u => {
-        if (u.role === 'voter' && u.is_approved === 0) {
+        if (u.is_approved === 0) {
           batch.update(doc(db, 'users', u.id), { is_approved: 1 });
         }
       });
@@ -1245,17 +1283,6 @@ export default function AdminDashboard({ user }: { user: User }) {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-t-full" />
           )}
         </button>
-        <button
-          onClick={() => setActiveTab('visitors')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative whitespace-nowrap ${
-            activeTab === 'visitors' ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          Akses Pengunjung
-          {activeTab === 'visitors' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-t-full" />
-          )}
-        </button>
       </div>
 
       {/* Content */}
@@ -1265,6 +1292,22 @@ export default function AdminDashboard({ user }: { user: User }) {
             <div className="p-4 bg-slate-50 flex justify-between items-center border-b border-slate-200">
               <h3 className="font-bold text-slate-900">Daftar Pengguna</h3>
               <div className="flex gap-2">
+                {selectedUserIds.length > 0 && (
+                  <select 
+                    onChange={(e) => {
+                      const role = e.target.value;
+                      if (role) handleBulkUpdateRole(role);
+                    }}
+                    className="px-4 py-2 border border-slate-300 rounded-xl text-sm"
+                  >
+                    <option value="">Ubah Role</option>
+                    <option value="pengunjung">Pengunjung</option>
+                    <option value="voter">Voter</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="candidate">Kandidat</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                )}
                 <button
                   onClick={handleApproveAll}
                   className="px-4 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
@@ -1282,6 +1325,19 @@ export default function AdminDashboard({ user }: { user: User }) {
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                 <tr>
+                  <th className="px-4 py-3">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedUserIds.length === users.length && users.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedUserIds(users.map(u => u.id));
+                        } else {
+                          setSelectedUserIds([]);
+                        }
+                      }}
+                    />
+                  </th>
                   <th className="px-4 py-3">Pengguna</th>
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">IP Address</th>
@@ -1291,6 +1347,19 @@ export default function AdminDashboard({ user }: { user: User }) {
               <tbody className="divide-y divide-slate-100">
                 {users.map((u, idx) => (
                   <tr key={`${u.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedUserIds.includes(u.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedUserIds([...selectedUserIds, u.id]);
+                          } else {
+                            setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
+                          }
+                        }}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <Link to={`/profile/${u.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                         <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover" />
@@ -1334,32 +1403,6 @@ export default function AdminDashboard({ user }: { user: User }) {
                         )}
                       </div>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : activeTab === 'visitors' ? (
-          <div className="overflow-x-auto">
-            <div className="p-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900">Akses Pengunjung</h3>
-            </div>
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">IP Address</th>
-                  <th className="px-4 py-3">Lokasi (Lat, Long)</th>
-                  <th className="px-4 py-3">Kamera</th>
-                  <th className="px-4 py-3">Waktu</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visitors.map((v, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">{v.ip_address}</td>
-                    <td className="px-4 py-3">{v.latitude}, {v.longitude}</td>
-                    <td className="px-4 py-3">{v.camera_access ? 'Ya' : 'Tidak'}</td>
-                    <td className="px-4 py-3">{new Date(v.timestamp).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1414,29 +1457,50 @@ export default function AdminDashboard({ user }: { user: User }) {
           <div className="divide-y divide-slate-100">
             <div className="p-4 bg-slate-50 flex justify-between items-center border-b border-slate-100">
               <h3 className="font-bold text-slate-900">Daftar Kandidat</h3>
-              <button
-                onClick={handleAddCandidate}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm"
-              >
-                Tambah Kandidat
-              </button>
+              <div className="flex gap-2">
+                {selectedCandidateIds.length > 0 && (
+                  <button
+                    onClick={handleBulkDeleteCandidates}
+                    className="px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors text-sm"
+                  >
+                    Hapus Terpilih
+                  </button>
+                )}
+                <button
+                  onClick={handleAddCandidate}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm"
+                >
+                  Tambah Kandidat
+                </button>
+              </div>
             </div>
             {candidates.length > 0 ? candidates.map((candidate, idx) => (
-              <div key={`${candidate.id}-${idx}`} className="p-4 hover:bg-slate-50 transition-colors">
-                <div className="flex items-start gap-4">
-                  <img src={candidate.avatar} alt={candidate.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-bold text-slate-900">{candidate.name}</h3>
-                        <p className="text-slate-500 text-sm">@{candidate.username}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditCandidate(candidate)}
-                          className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-                          title="Edit Kandidat"
-                        >
+              <div key={`${candidate.id}-${idx}`} className="p-4 hover:bg-slate-50 transition-colors flex items-start gap-4">
+                <input 
+                  type="checkbox" 
+                  checked={selectedCandidateIds.includes(candidate.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedCandidateIds([...selectedCandidateIds, candidate.id]);
+                    } else {
+                      setSelectedCandidateIds(selectedCandidateIds.filter(id => id !== candidate.id));
+                    }
+                  }}
+                  className="mt-4"
+                />
+                <img src={candidate.avatar} alt={candidate.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-slate-900">{candidate.name}</h3>
+                      <p className="text-slate-500 text-sm">@{candidate.username}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditCandidate(candidate)}
+                        className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Edit Kandidat"
+                      >
                           <Edit3 className="w-4 h-4" />
                         </button>
                         <button
@@ -1464,8 +1528,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                       </div>
                   </div>
                 </div>
-              </div>
-            )) : (
+              )) : (
               <div className="p-8 text-center text-slate-500">Belum ada kandidat terdaftar.</div>
             )}
           </div>

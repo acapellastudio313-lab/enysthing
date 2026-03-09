@@ -195,17 +195,17 @@ export default function Home({ user }: { user: User }) {
     try {
       let finalAudioUrl = null;
       if (audioBlob) {
-        finalAudioUrl = await uploadFile(audioBlob, `audio/${Date.now()}.webm`);
+        finalAudioUrl = await uploadFile(audioBlob as File);
       }
 
       let finalVideoUrl = videoUrl;
       if (videoFile) {
-        finalVideoUrl = await uploadFile(videoFile, `videos/${Date.now()}_${videoFile.name}`);
+        finalVideoUrl = await uploadFile(videoFile);
       }
 
       let finalDocumentUrl = documentUrl;
       if (documentFile) {
-        finalDocumentUrl = await uploadFile(documentFile, `documents/${Date.now()}_${documentFile.name}`);
+        finalDocumentUrl = await uploadFile(documentFile);
       }
 
       // For images, if it's a data URL from compressImage, we should also upload it to be safe
@@ -213,7 +213,8 @@ export default function Home({ user }: { user: User }) {
       if (imageUrl && imageUrl.startsWith('data:image')) {
         const response = await fetch(imageUrl);
         const blob = await response.blob();
-        finalImageUrl = await uploadFile(blob, `images/${Date.now()}.jpg`);
+        const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
+        finalImageUrl = await uploadFile(file);
       } else if (showImageInput && !imageUrl) {
         finalImageUrl = `https://picsum.photos/seed/${Math.random()}/800/600`;
       }

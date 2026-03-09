@@ -23,15 +23,24 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
 
   const navItems = [
     { icon: Home, label: 'Beranda', to: '/' },
-    { icon: Search, label: 'Eksplor', to: '/explore', mobileOnly: true },
+    { icon: Search, label: 'Eksplor', to: '/explore' },
     { icon: Users, label: 'Kandidat', to: '/candidates' },
     { icon: Trophy, label: 'Klasemen', to: '/leaderboard' },
     { icon: Gamepad2, label: 'Hiburan', to: '/entertainment' },
     { icon: UserIcon, label: 'Profil', to: '/profile' },
   ];
 
+  const filteredNavItems = navItems.filter(item => {
+    if (user.role === 'admin') return true;
+    if (user.role === 'pengunjung') return ['Beranda', 'Profil'].includes(item.label);
+    if (user.role === 'voter') return ['Beranda', 'Eksplor', 'Kandidat', 'Hiburan', 'Profil'].includes(item.label);
+    if (user.role === 'moderator') return ['Beranda', 'Eksplor', 'Kandidat', 'Klasemen', 'Hiburan', 'Profil'].includes(item.label);
+    if (user.role === 'candidate') return ['Beranda', 'Eksplor', 'Kandidat', 'Profil'].includes(item.label);
+    return false;
+  });
+
   if (user.role === 'admin') {
-    navItems.push({ icon: Shield, label: 'Admin Panel', to: '/admin' });
+    filteredNavItems.push({ icon: Shield, label: 'Admin Panel', to: '/admin' });
   }
 
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -138,7 +147,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
           </div>
 
           <nav className="flex-1 space-y-2">
-            {navItems.filter(item => !item.mobileOnly).map((item) => {
+            {filteredNavItems.map((item) => {
               let showBadge = false;
               if (item.to === '/candidates') {
                 showBadge = electionStatus === 'in_progress';
@@ -245,7 +254,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
       {/* Mobile Bottom Navigation */}
       {!isNavHidden && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-2 z-50 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             let showBadge = false;
             if (item.to === '/candidates') {
               showBadge = electionStatus === 'in_progress';

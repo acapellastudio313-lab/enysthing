@@ -59,24 +59,6 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
     const fetchProfile = async () => {
       if (isOwnProfile) {
         setProfileUser({ ...currentUser });
-        
-        // Auto-fetch location if not set
-        if (!currentUser.location) {
-          try {
-            const res = await fetch('https://ipapi.co/json/');
-            const data = await res.json();
-            if (data.city && data.country_name) {
-              const loc = `${data.city}, ${data.country_name}`;
-              await updateUser(currentUser.id, { location: loc });
-              setProfileUser(prev => prev ? { ...prev, location: loc } : null);
-              if (onUpdateUser) {
-                onUpdateUser({ ...currentUser, location: loc });
-              }
-            }
-          } catch (e) {
-            console.error('Failed to fetch location:', e);
-          }
-        }
       } else {
         try {
           const user = await getUser(targetUserId);
@@ -345,9 +327,23 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
             />
           </div>
           {canEditProfile ? (
-            <button onClick={openEditModal} className="w-full sm:w-auto px-4 py-2 rounded-full border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 bg-white shadow-sm text-sm sm:text-base">
-              <Edit3 className="w-4 h-4" /> Edit Profil
-            </button>
+            <div className="flex gap-2">
+              {currentUser.role === 'admin' && profileUser.is_approved === 0 && (
+                <button 
+                  onClick={async () => {
+                    await updateUser(profileUser.id, { is_approved: 1 });
+                    setProfileUser({ ...profileUser, is_approved: 1 });
+                    toast.success('Akun berhasil disetujui');
+                  }}
+                  className="px-4 py-2 rounded-full bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-sm text-sm sm:text-base"
+                >
+                  <CheckCircle className="w-4 h-4" /> Setujui Akun
+                </button>
+              )}
+              <button onClick={openEditModal} className="w-full sm:w-auto px-4 py-2 rounded-full border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 bg-white shadow-sm text-sm sm:text-base">
+                <Edit3 className="w-4 h-4" /> Edit Profil
+              </button>
+            </div>
           ) : (
             <button 
               onClick={handleStartMessage}
@@ -368,17 +364,6 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
 
         <div className="mt-4 text-sm sm:text-base text-slate-800 leading-relaxed max-w-2xl text-center sm:text-left">
           <p>{profileUser.bio || 'Pegawai Pengadilan Agama Prabumulih. Berkomitmen untuk memberikan pelayanan terbaik bagi masyarakat pencari keadilan.'}</p>
-          {profileUser.location && (
-            <div className="flex flex-col items-center sm:items-start gap-1 mt-2 text-slate-500 text-sm">
-              <div className="flex items-center gap-1.5">
-                <MapPin className="w-4 h-4 text-slate-400" />
-                <span>{profileUser.location}</span>
-              </div>
-              {profileUser.latitude && profileUser.longitude && (
-                <span className="text-xs text-slate-400">Lat: {profileUser.latitude.toFixed(4)}, Long: {profileUser.longitude.toFixed(4)}</span>
-              )}
-            </div>
-          )}
         </div>
 
         <div className="mt-6 flex flex-wrap justify-center sm:justify-start gap-3 sm:gap-4 text-xs sm:text-sm text-slate-500 font-medium">

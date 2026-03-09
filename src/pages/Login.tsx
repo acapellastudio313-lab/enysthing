@@ -124,12 +124,11 @@ export default function Login({ onLogin }: LoginProps) {
         console.error('Failed to get IP');
       }
 
-      // Create new user
-      await createUser({
+      const newUser = await createUser({
         name,
         username,
         password,
-        role: 'voter',
+        role: 'pengunjung',
         is_approved: 0, // Needs admin approval
         is_verified: 0, // No verification icon by default
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
@@ -143,7 +142,7 @@ export default function Login({ onLogin }: LoginProps) {
         message: `Pengguna baru mendaftar: ${name} (@${username})`,
         actor_name: name,
         actor_avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
-        link: '/admin/users'
+        link: `/profile/${newUser.id}`
       });
 
       setSuccess('Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan admin.');
