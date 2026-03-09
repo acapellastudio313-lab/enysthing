@@ -76,12 +76,14 @@ export default function Entertainment({ user }: { user: User }) {
         ) : activeTab === 'spin' ? (
           <SpinSection user={user} isAdminOrMod={isAdminOrMod} />
         ) : (
-          <NumberSection user={user} isAdminOrMod={isAdminOrMod} />
+          <NumberSection user={user} isAdminOrMod={isAdminOrMod} setActiveTab={setActiveTab} />
         )}
       </div>
     </div>
   );
 }
+
+const DEFAULT_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 // --- NUMBER GENERATOR SECTION ---
 
@@ -95,7 +97,7 @@ interface NumberState {
   customNumbers?: Record<string, string | number>;
 }
 
-function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
+function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdminOrMod: boolean, setActiveTab: (tab: 'kuis' | 'spin' | 'number') => void }) {
   const isAdmin = user.role === 'admin';
   const isModerator = user.role === 'moderator';
   
@@ -208,6 +210,32 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
     setTimeout(() => {
       updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
     }, 3000);
+  };
+
+  const handleSendToSpin = async () => {
+    if (!numberState) return;
+    
+    const allUsers = await getAllUsers();
+    const newItems: {id: string, text: string, color: string}[] = [];
+    
+    allUsers.forEach((u, index) => {
+      const num = numberState.customNumbers?.[u.id] ?? numberState.userNumbers?.[u.id];
+      if (num !== undefined && num !== null) {
+        newItems.push({
+          id: Date.now().toString() + index,
+          text: `${num} - ${u.name}`,
+          color: DEFAULT_COLORS[index % DEFAULT_COLORS.length]
+        });
+      }
+    });
+    
+    if (newItems.length > 0) {
+      localStorage.setItem('pendingSpinItems', JSON.stringify(newItems));
+      setActiveTab('spin');
+      toast.success('Data berhasil dikirim. Silakan klik Simpan Pengaturan.');
+    } else {
+      toast.error('Belum ada nomor yang dibagikan');
+    }
   };
 
   const handleUpdateRange = async () => {
@@ -392,14 +420,24 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
           )}
           
           {isAdminOrMod && (
-            <button
-              onClick={handleGenerateRandom}
-              disabled={isAnimating || numberState.isGenerating}
-              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <RefreshCw className={clsx("w-5 h-5", (isAnimating || numberState.isGenerating) && "animate-spin")} />
-              Berikan Nomor Acak ({numberState.minRange || 1} - {numberState.maxRange || 100})
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={handleGenerateRandom}
+                disabled={isAnimating || numberState.isGenerating}
+                className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <RefreshCw className={clsx("w-5 h-5", (isAnimating || numberState.isGenerating) && "animate-spin")} />
+                Berikan Nomor Acak ({numberState.minRange || 1} - {numberState.maxRange || 100})
+              </button>
+              <button
+                onClick={handleSendToSpin}
+                disabled={isAnimating || numberState.isGenerating}
+                className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Play className="w-5 h-5" />
+                Kirim Hasil ke Putaran Bebas
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -990,8 +1028,6 @@ interface SpinState {
   spinDuration?: number; // Duration in seconds
 }
 
-const DEFAULT_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-
 function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
   const [spinState, setSpinState] = useState<SpinState | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -1005,6 +1041,22 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
   const rotationRef = useRef(0);
   const lastSpinStateRef = useRef<SpinState | null>(null);
   const isEditingRef = useRef(isEditing);
+
+  useEffect(() => {
+    const pendingItems = localStorage.getItem('pendingSpinItems');
+    if (pendingItems) {
+      try {
+        const parsed = JSON.parse(pendingItems);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setEditItems(parsed);
+          setIsEditing(true);
+          localStorage.removeItem('pendingSpinItems');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
 
   // Update refs when state changes
   useEffect(() => {
