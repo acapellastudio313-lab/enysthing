@@ -25,7 +25,10 @@ import {
   createUser,
   getCandidateVoters,
   uploadBase64ToStorage,
-  notifyAllUsers
+  notifyAllUsers,
+  bulkDeleteUsers,
+  bulkDeleteCandidates,
+  sendSystemNotification
 } from '../lib/db';
 import { compressImage } from '../utils';
 
@@ -1121,6 +1124,31 @@ export default function AdminDashboard({ user }: { user: User }) {
 
           <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
             <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Kirim Notifikasi Sistem
+            </h3>
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Tulis notifikasi untuk semua pengguna..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const target = e.target as HTMLInputElement;
+                    if (target.value.trim()) {
+                      sendSystemNotification(target.value.trim());
+                      toast.success('Notifikasi dikirim');
+                      target.value = '';
+                    }
+                  }
+                }}
+              />
+              <p className="text-xs text-slate-500">Tekan Enter untuk mengirim notifikasi ke semua pengguna.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
               <Shield className="w-4 h-4" />
               Pengaturan SEO & Tampilan Tab
             </h3>
@@ -1293,20 +1321,34 @@ export default function AdminDashboard({ user }: { user: User }) {
               <h3 className="font-bold text-slate-900">Daftar Pengguna</h3>
               <div className="flex gap-2">
                 {selectedUserIds.length > 0 && (
-                  <select 
-                    onChange={(e) => {
-                      const role = e.target.value;
-                      if (role) handleBulkUpdateRole(role);
-                    }}
-                    className="px-4 py-2 border border-slate-300 rounded-xl text-sm"
-                  >
-                    <option value="">Ubah Role</option>
-                    <option value="pengunjung">Pengunjung</option>
-                    <option value="voter">Voter</option>
-                    <option value="moderator">Moderator</option>
-                    <option value="candidate">Kandidat</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  <>
+                    <button 
+                      onClick={async () => {
+                        if (!confirm(`Hapus ${selectedUserIds.length} pengguna?`)) return;
+                        await bulkDeleteUsers(selectedUserIds);
+                        toast.success('Pengguna berhasil dihapus');
+                        fetchUsers();
+                        setSelectedUserIds([]);
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" /> Hapus Terpilih
+                    </button>
+                    <select 
+                      onChange={(e) => {
+                        const role = e.target.value;
+                        if (role) handleBulkUpdateRole(role);
+                      }}
+                      className="px-4 py-2 border border-slate-300 rounded-xl text-sm"
+                    >
+                      <option value="">Ubah Role</option>
+                      <option value="pengunjung">Pengunjung</option>
+                      <option value="voter">Voter</option>
+                      <option value="moderator">Moderator</option>
+                      <option value="candidate">Kandidat</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </>
                 )}
                 <button
                   onClick={handleApproveAll}
@@ -1328,10 +1370,10 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <th className="px-4 py-3">
                     <input 
                       type="checkbox" 
-                      checked={selectedUserIds.length === users.length && users.length > 0}
+                      checked={selectedUserIds.length === users.filter(u => u.role !== 'admin').length && users.filter(u => u.role !== 'admin').length > 0}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedUserIds(users.map(u => u.id));
+                          setSelectedUserIds(users.filter(u => u.role !== 'admin').map(u => u.id));
                         } else {
                           setSelectedUserIds([]);
                         }
@@ -1348,17 +1390,19 @@ export default function AdminDashboard({ user }: { user: User }) {
                 {users.map((u, idx) => (
                   <tr key={`${u.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedUserIds.includes(u.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedUserIds([...selectedUserIds, u.id]);
-                          } else {
-                            setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
-                          }
-                        }}
-                      />
+                      {u.role !== 'admin' && (
+                        <input 
+                          type="checkbox" 
+                          checked={selectedUserIds.includes(u.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedUserIds([...selectedUserIds, u.id]);
+                            } else {
+                              setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
+                            }
+                          }}
+                        />
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Link to={`/profile/${u.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -1456,7 +1500,20 @@ export default function AdminDashboard({ user }: { user: User }) {
         ) : activeTab === 'candidates' ? (
           <div className="divide-y divide-slate-100">
             <div className="p-4 bg-slate-50 flex justify-between items-center border-b border-slate-100">
-              <h3 className="font-bold text-slate-900">Daftar Kandidat</h3>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  checked={selectedCandidateIds.length === candidates.length && candidates.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedCandidateIds(candidates.map(c => c.id));
+                    } else {
+                      setSelectedCandidateIds([]);
+                    }
+                  }}
+                />
+                <h3 className="font-bold text-slate-900">Daftar Kandidat</h3>
+              </div>
               <div className="flex gap-2">
                 {selectedCandidateIds.length > 0 && (
                   <button

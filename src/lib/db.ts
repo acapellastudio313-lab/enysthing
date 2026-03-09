@@ -859,11 +859,27 @@ export const resetAllData = async () => {
   }
 };
 
-export const addVisitor = async (visitorData: any) => {
-  await addDoc(collection(db, "visitors"), visitorData);
+export const sendSystemNotification = async (message: string) => {
+  await addDoc(collection(db, "notifications"), {
+    type: 'system',
+    message,
+    is_read: 0,
+    created_at: serverTimestamp(),
+  });
 };
 
-export const getVisitors = async () => {
-  const snapshot = await getDocs(collection(db, "visitors"));
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+export const bulkDeleteUsers = async (userIds: string[]) => {
+  const batch = writeBatch(db);
+  userIds.forEach(id => {
+    batch.delete(doc(db, "users", id));
+  });
+  await batch.commit();
+};
+
+export const bulkDeleteCandidates = async (candidateIds: string[]) => {
+  const batch = writeBatch(db);
+  candidateIds.forEach(id => {
+    batch.delete(doc(db, "candidates", id));
+  });
+  await batch.commit();
 };

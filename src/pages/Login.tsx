@@ -129,7 +129,7 @@ export default function Login({ onLogin }: LoginProps) {
         username,
         password,
         role: 'pengunjung',
-        is_approved: 0, // Needs admin approval
+        is_approved: 1, // Auto-approve
         is_verified: 0, // No verification icon by default
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
         join_date: new Date().toISOString(),
