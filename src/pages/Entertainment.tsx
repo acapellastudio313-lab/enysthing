@@ -96,6 +96,9 @@ interface NumberState {
 }
 
 function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
+  const isAdmin = user.role === 'admin';
+  const isModerator = user.role === 'moderator';
+  
   const [numberState, setNumberState] = useState<NumberState | null>(null);
   const [displayNumber, setDisplayNumber] = useState<string | number | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -286,16 +289,18 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
               >
                 <Settings className="w-5 h-5" />
               </button>
-              <button
-                onClick={() => setShowAllAccounts(!showAllAccounts)}
-                className={clsx(
-                  "p-2 rounded-lg transition-colors",
-                  showAllAccounts ? "bg-emerald-100 text-emerald-600" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                )}
-                title="Tampilkan Semua Akun"
-              >
-                <Users className="w-5 h-5" />
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAllAccounts(!showAllAccounts)}
+                  className={clsx(
+                    "p-2 rounded-lg transition-colors",
+                    showAllAccounts ? "bg-emerald-100 text-emerald-600" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                  )}
+                  title="Tampilkan Semua Akun"
+                >
+                  <Users className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
           
@@ -335,8 +340,8 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
             </div>
           )}
 
-          {/* User Custom Numbers */}
-          {showAllAccounts && (
+          {/* User Custom Numbers (Admin Only) */}
+          {isAdmin && showAllAccounts && (
             <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-700 sticky top-0 bg-white pb-2 border-b border-slate-100">
                 <Users className="w-4 h-4" />
@@ -386,14 +391,16 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
             </div>
           )}
           
-          <button
-            onClick={handleGenerateRandom}
-            disabled={isAnimating || numberState.isGenerating}
-            className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            <RefreshCw className={clsx("w-5 h-5", (isAnimating || numberState.isGenerating) && "animate-spin")} />
-            Berikan Nomor Acak ({numberState.minRange || 1} - {numberState.maxRange || 100})
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleGenerateRandom}
+              disabled={isAnimating || numberState.isGenerating}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCw className={clsx("w-5 h-5", (isAnimating || numberState.isGenerating) && "animate-spin")} />
+              Berikan Nomor Acak ({numberState.minRange || 1} - {numberState.maxRange || 100})
+            </button>
+          )}
         </div>
       )}
 
