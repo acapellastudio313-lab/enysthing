@@ -369,9 +369,14 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
         <div className="mt-4 text-sm sm:text-base text-slate-800 leading-relaxed max-w-2xl text-center sm:text-left">
           <p>{profileUser.bio || 'Pegawai Pengadilan Agama Prabumulih. Berkomitmen untuk memberikan pelayanan terbaik bagi masyarakat pencari keadilan.'}</p>
           {profileUser.location && (
-            <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-2 text-slate-500 text-sm">
-              <MapPin className="w-4 h-4 text-slate-400" />
-              <span>{profileUser.location}</span>
+            <div className="flex flex-col items-center sm:items-start gap-1 mt-2 text-slate-500 text-sm">
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-slate-400" />
+                <span>{profileUser.location}</span>
+              </div>
+              {profileUser.latitude && profileUser.longitude && (
+                <span className="text-xs text-slate-400">Lat: {profileUser.latitude.toFixed(4)}, Long: {profileUser.longitude.toFixed(4)}</span>
+              )}
             </div>
           )}
         </div>
