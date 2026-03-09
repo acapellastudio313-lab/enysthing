@@ -23,15 +23,13 @@ import {
   createUser,
   getCandidateVoters,
   uploadBase64ToStorage,
-  notifyAllUsers,
-  getVisitors
+  notifyAllUsers
 } from '../lib/db';
 import { compressImage } from '../utils';
 
 export default function AdminDashboard({ user }: { user: User }) {
   const [stats, setStats] = useState({ users: 0, posts: 0, votes: 0, candidates: 0 });
   const [users, setUsers] = useState<User[]>([]);
-  const [visitors, setVisitors] = useState<any[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -128,9 +126,6 @@ export default function AdminDashboard({ user }: { user: User }) {
       
       const l = await getLeaderboard();
       setLeaderboard(l);
-
-      const v = await getVisitors();
-      setVisitors(v);
     };
 
     fetchData();
@@ -1245,17 +1240,6 @@ export default function AdminDashboard({ user }: { user: User }) {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-t-full" />
           )}
         </button>
-        <button
-          onClick={() => setActiveTab('visitors')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative whitespace-nowrap ${
-            activeTab === 'visitors' ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          Akses Pengunjung
-          {activeTab === 'visitors' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-t-full" />
-          )}
-        </button>
       </div>
 
       {/* Content */}
@@ -1334,32 +1318,6 @@ export default function AdminDashboard({ user }: { user: User }) {
                         )}
                       </div>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : activeTab === 'visitors' ? (
-          <div className="overflow-x-auto">
-            <div className="p-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900">Akses Pengunjung</h3>
-            </div>
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">IP Address</th>
-                  <th className="px-4 py-3">Lokasi (Lat, Long)</th>
-                  <th className="px-4 py-3">Kamera</th>
-                  <th className="px-4 py-3">Waktu</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visitors.map((v, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">{v.ip_address}</td>
-                    <td className="px-4 py-3">{v.latitude}, {v.longitude}</td>
-                    <td className="px-4 py-3">{v.camera_access ? 'Ya' : 'Tidak'}</td>
-                    <td className="px-4 py-3">{new Date(v.timestamp).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

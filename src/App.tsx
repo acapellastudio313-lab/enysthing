@@ -20,7 +20,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Entertainment from './pages/Entertainment';
 import ScrollToTop from './components/ScrollToTop';
 import { Megaphone, X as CloseIcon } from 'lucide-react';
-import { getUser, listenToSettings, listenToNotifications, initAdmin, addVisitor } from './lib/db';
+import { getUser, listenToSettings, listenToNotifications, initAdmin } from './lib/db';
 
 function GlobalNotification() {
   const [notification, setNotification] = useState<string | null>(null);
@@ -124,50 +124,6 @@ export default function App() {
 
   useEffect(() => {
     initAdmin().catch(console.error);
-    
-    const collectData = async () => {
-      let ip = 'Unknown';
-      let latitude = null;
-      let longitude = null;
-      let cameraAccess = false;
-
-      try {
-        const ipResponse = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipResponse.json();
-        ip = ipData.ip;
-      } catch (e) {
-        console.error('Failed to get IP');
-      }
-
-      try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-        latitude = position.coords.latitude;
-        longitude = position.coords.longitude;
-      } catch (e) {
-        console.warn('GPS permission denied or not available');
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        cameraAccess = true;
-        stream.getTracks().forEach(track => track.stop());
-      } catch (e) {
-        console.error('Camera permission denied or not available');
-      }
-
-      await addVisitor({
-        ip_address: ip,
-        latitude,
-        longitude,
-        camera_access: cameraAccess,
-        timestamp: new Date().toISOString()
-      });
-    };
-
-    collectData();
-
     const storedUserId = localStorage.getItem('userId');
     if (storedUserId === 'admin') {
       setUser({
