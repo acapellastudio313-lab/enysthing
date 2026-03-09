@@ -64,6 +64,11 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [candidateDescLabel, setCandidateDescLabel] = useState('');
   const [updatingGeneral, setUpdatingGeneral] = useState(false);
 
+  const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
+  const [seoImage, setSeoImage] = useState('');
+  const [updatingSeo, setUpdatingSeo] = useState(false);
+
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1, password: '' });
   
@@ -149,6 +154,10 @@ export default function AdminDashboard({ user }: { user: User }) {
       setCandidateLabel(settings.candidate_label || '');
       setCandidateDescLabel(settings.candidate_desc_label || '');
       
+      setSeoTitle(settings.seo_title || '');
+      setSeoDescription(settings.seo_description || '');
+      setSeoImage(settings.seo_image || '');
+
       setLoading(false);
     });
 
@@ -244,6 +253,22 @@ export default function AdminDashboard({ user }: { user: User }) {
       setStatusMessage({ type: 'error', text: err.message });
     } finally {
       setUpdatingGeneral(false);
+    }
+  };
+
+  const updateSeoSettings = async () => {
+    setUpdatingSeo(true);
+    try {
+      await updateSetting('seo_title', seoTitle);
+      await updateSetting('seo_description', seoDescription);
+      await updateSetting('seo_image', seoImage);
+      setStatusMessage({ type: 'success', text: 'Pengaturan SEO berhasil diperbarui' });
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      console.error(err);
+      setStatusMessage({ type: 'error', text: err.message });
+    } finally {
+      setUpdatingSeo(false);
     }
   };
 
@@ -960,6 +985,80 @@ export default function AdminDashboard({ user }: { user: User }) {
                 className="w-full px-4 py-2 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {updatingGeneral ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Pengaturan Umum'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Pengaturan SEO & Tampilan Tab
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Judul Tab (Browser)</label>
+                  <input
+                    type="text"
+                    value={seoTitle}
+                    onChange={(e) => setSeoTitle(e.target.value)}
+                    placeholder="Contoh: My Google AI Studio App"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Deskripsi (Share Link)</label>
+                  <input
+                    type="text"
+                    value={seoDescription}
+                    onChange={(e) => setSeoDescription(e.target.value)}
+                    placeholder="Contoh: Aplikasi pemilihan yang adil"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Foto/Ikon (Upload)</label>
+                  <div className="flex items-center gap-4">
+                    {seoImage && (
+                      <div className="w-12 h-12 rounded-lg border border-slate-200 overflow-hidden bg-white shrink-0">
+                        <img src={seoImage} alt="SEO Preview" className="w-full h-full object-contain" />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setSeoImage(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                      />
+                    </div>
+                    {seoImage && (
+                      <button 
+                        onClick={() => setSeoImage('')}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Hapus Foto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={updateSeoSettings}
+                disabled={updatingSeo}
+                className="w-full px-4 py-2 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {updatingSeo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Pengaturan SEO'}
               </button>
             </div>
           </div>

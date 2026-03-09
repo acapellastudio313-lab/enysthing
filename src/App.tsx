@@ -75,6 +75,47 @@ function NotificationHandler({ user }: { user: User }) {
   return null;
 }
 
+function SeoUpdater() {
+  useEffect(() => {
+    const unsubscribe = listenToSettings((settings) => {
+      const title = settings.seo_title || 'My Google AI Studio App';
+      const description = settings.seo_description || 'Aplikasi pemilihan yang adil dan transparan';
+      const image = settings.seo_image || 'https://ui-avatars.com/api/?name=App&background=10b981&color=fff';
+
+      document.title = title;
+
+      const setMeta = (nameOrProperty: string, value: string, isProperty = false) => {
+        const attr = isProperty ? 'property' : 'name';
+        let el = document.querySelector(`meta[${attr}="${nameOrProperty}"]`);
+        if (!el) {
+          el = document.createElement('meta');
+          el.setAttribute(attr, nameOrProperty);
+          document.head.appendChild(el);
+        }
+        el.setAttribute('content', value);
+      };
+
+      setMeta('description', description);
+      setMeta('og:title', title, true);
+      setMeta('og:description', description, true);
+      setMeta('og:image', image, true);
+      setMeta('twitter:title', title);
+      setMeta('twitter:description', description);
+      setMeta('twitter:image', image);
+
+      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = image;
+    });
+    return () => unsubscribe();
+  }, []);
+  return null;
+}
+
 // Force Vercel Sync 2026-03-08
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -124,6 +165,7 @@ export default function App() {
 
   return (
     <>
+      <SeoUpdater />
       <ScrollToTop />
       <NotificationHandler user={user} />
       <GlobalNotification />
