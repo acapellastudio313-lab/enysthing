@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, orderBy, limit, increment, arrayUnion, arrayRemove, Timestamp, writeBatch } from "firebase/firestore";
-import { db } from "./firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "./firebase";
 import { User, Post, Comment, Story, Candidate, LeaderboardEntry, Conversation, Message, Notification } from "../types";
 
 /**
@@ -181,6 +182,46 @@ export const deleteFileChunks = async (fileId: string) => {
     await batch.commit();
   } catch (error) {
     console.error("Error deleting file chunks:", error);
+  }
+};
+
+export const uploadToStorage = async (file: File, path: string): Promise<string> => {
+  try {
+    const storageRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  } catch (error) {
+    console.error("Error uploading to Firebase Storage:", error);
+    throw error;
+  }
+};
+
+export const uploadBase64ToStorage = async (base64String: string, path: string): Promise<string> => {
+  try {
+    // Extract mime type and base64 data
+    const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      throw new Error('Invalid base64 string');
+    }
+    
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    
+    // Convert base64 to binary
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    const blob = new Blob([bytes], { type: mimeType });
+    const file = new File([blob], `image_${Date.now()}.${mimeType.split('/')[1] || 'jpg'}`, { type: mimeType });
+    
+    return await uploadToStorage(file, path);
+  } catch (error) {
+    console.error("Error uploading base64 to Firebase Storage:", error);
+    throw error;
   }
 };
 

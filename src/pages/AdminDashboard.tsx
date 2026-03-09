@@ -21,8 +21,10 @@ import {
   updateUser,
   updateCandidate,
   createUser,
-  getCandidateVoters
+  getCandidateVoters,
+  uploadBase64ToStorage
 } from '../lib/db';
+import { compressImage } from '../utils';
 
 export default function AdminDashboard({ user }: { user: User }) {
   const [stats, setStats] = useState({ users: 0, posts: 0, votes: 0, candidates: 0 });
@@ -240,10 +242,22 @@ export default function AdminDashboard({ user }: { user: User }) {
   const updateGeneralSettings = async () => {
     setUpdatingGeneral(true);
     try {
+      let finalAppLogo = appLogo;
+      if (appLogo && appLogo.startsWith('data:image')) {
+        finalAppLogo = await uploadBase64ToStorage(appLogo, 'settings');
+        setAppLogo(finalAppLogo);
+      }
+      
+      let finalAppIcon = appIcon;
+      if (appIcon && appIcon.startsWith('data:image')) {
+        finalAppIcon = await uploadBase64ToStorage(appIcon, 'settings');
+        setAppIcon(finalAppIcon);
+      }
+
       await updateSetting('app_name', appName);
       await updateSetting('app_subtitle', appSubtitle);
-      await updateSetting('app_logo', appLogo);
-      await updateSetting('app_icon', appIcon);
+      await updateSetting('app_logo', finalAppLogo);
+      await updateSetting('app_icon', finalAppIcon);
       await updateSetting('candidate_label', candidateLabel);
       await updateSetting('candidate_desc_label', candidateDescLabel);
       setStatusMessage({ type: 'success', text: 'Pengaturan umum berhasil diperbarui' });
@@ -259,9 +273,15 @@ export default function AdminDashboard({ user }: { user: User }) {
   const updateSeoSettings = async () => {
     setUpdatingSeo(true);
     try {
+      let finalSeoImage = seoImage;
+      if (seoImage && seoImage.startsWith('data:image')) {
+        finalSeoImage = await uploadBase64ToStorage(seoImage, 'settings');
+        setSeoImage(finalSeoImage);
+      }
+
       await updateSetting('seo_title', seoTitle);
       await updateSetting('seo_description', seoDescription);
-      await updateSetting('seo_image', seoImage);
+      await updateSetting('seo_image', finalSeoImage);
       setStatusMessage({ type: 'success', text: 'Pengaturan SEO berhasil diperbarui' });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
@@ -934,14 +954,16 @@ export default function AdminDashboard({ user }: { user: User }) {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setAppLogo(reader.result as string);
-                            };
-                            reader.readAsDataURL(file);
+                            try {
+                              const compressed = await compressImage(file, 400, 0.7);
+                              setAppLogo(compressed);
+                            } catch (err) {
+                              console.error('Failed to compress logo', err);
+                              toast.error('Gagal memproses gambar logo');
+                            }
                           }
                         }}
                         className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
@@ -1028,14 +1050,16 @@ export default function AdminDashboard({ user }: { user: User }) {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setSeoImage(reader.result as string);
-                            };
-                            reader.readAsDataURL(file);
+                            try {
+                              const compressed = await compressImage(file, 800, 0.7);
+                              setSeoImage(compressed);
+                            } catch (err) {
+                              console.error('Failed to compress SEO image', err);
+                              toast.error('Gagal memproses gambar SEO');
+                            }
                           }
                         }}
                         className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
