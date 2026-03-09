@@ -1173,7 +1173,12 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
           const itemsCount = data.items.length;
           const sliceAngle = 360 / itemsCount;
           
-          const targetAngleFromStart = (data.targetIndex! * sliceAngle) + (sliceAngle / 2);
+          // Calculate random offset within the slice (avoiding the exact edges)
+          // The slice goes from (index * sliceAngle) to ((index + 1) * sliceAngle)
+          // We want the pointer (top, which is -90deg or 270deg) to land somewhere inside this slice.
+          // To make it land randomly within the slice, we add a random offset between 5% and 95% of the slice width.
+          const randomOffset = sliceAngle * (0.05 + Math.random() * 0.9);
+          const targetAngleFromStart = (data.targetIndex! * sliceAngle) + randomOffset;
           const targetRotation = -targetAngleFromStart;
           
           // Use ref for current rotation to calculate next step
