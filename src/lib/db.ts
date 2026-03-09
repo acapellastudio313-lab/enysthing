@@ -858,3 +858,12 @@ export const resetAllData = async () => {
     await batch.commit();
   }
 };
+
+export const addVisitor = async (visitorData: any) => {
+  await addDoc(collection(db, "visitors"), visitorData);
+};
+
+export const getVisitors = async () => {
+  const snapshot = await getDocs(collection(db, "visitors"));
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};

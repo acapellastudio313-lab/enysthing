@@ -114,7 +114,7 @@ export default function Login({ onLogin }: LoginProps) {
         return;
       }
 
-      // Capture IP and GPS
+      // Capture IP
       let ip = 'Unknown';
       try {
         const ipResponse = await fetch('https://api.ipify.org?format=json');
@@ -122,17 +122,6 @@ export default function Login({ onLogin }: LoginProps) {
         ip = ipData.ip;
       } catch (e) {
         console.error('Failed to get IP');
-      }
-
-      let latitude, longitude;
-      try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-        latitude = position.coords.latitude;
-        longitude = position.coords.longitude;
-      } catch (e) {
-        console.error('GPS permission denied or not available');
       }
 
       // Create new user
@@ -146,9 +135,7 @@ export default function Login({ onLogin }: LoginProps) {
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
         join_date: new Date().toISOString(),
         bio: 'Pengguna Baru',
-        ip_address: ip,
-        latitude,
-        longitude
+        ip_address: ip
       });
 
       await notifyAdmins({

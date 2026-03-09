@@ -186,7 +186,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
 
       {/* Main Content Area */}
       <div className={clsx(
-        "w-full min-h-screen border-r border-l md:border-l-0 border-slate-200 bg-white pb-20 md:pb-0",
+        "w-full min-h-screen border-r border-l md:border-l-0 border-slate-200 bg-white pb-20 md:pb-0 z-10",
         isNavHidden ? "max-w-full" : (location.pathname.startsWith('/admin') ? "max-w-full md:ml-64" : "max-w-2xl md:ml-64 lg:mr-80")
       )}>
         {/* Header */}
