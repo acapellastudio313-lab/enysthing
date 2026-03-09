@@ -391,7 +391,7 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
             </div>
           )}
           
-          {isAdmin && (
+          {isAdminOrMod && (
             <button
               onClick={handleGenerateRandom}
               disabled={isAnimating || numberState.isGenerating}
