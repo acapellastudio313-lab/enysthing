@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { User } from '../types';
-import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash } from 'lucide-react';
+import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, deleteDoc, serverTimestamp, query, where, orderBy, writeBatch } from 'firebase/firestore';
+import { getAllUsers } from '../lib/db';
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 
@@ -88,13 +89,23 @@ interface NumberState {
   currentNumber: string | number | null;
   isGenerating: boolean;
   lastUpdated: number | null;
+  minRange?: number;
+  maxRange?: number;
+  customNumbers?: Record<string, string | number>;
 }
 
 function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
   const [numberState, setNumberState] = useState<NumberState | null>(null);
-  const [customNumber, setCustomNumber] = useState('');
   const [displayNumber, setDisplayNumber] = useState<string | number | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Admin UI State
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
+  const [showRangeSettings, setShowRangeSettings] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [minRange, setMinRange] = useState(1);
+  const [maxRange, setMaxRange] = useState(100);
+  const [userCustomInputs, setUserCustomInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const unsubNumber = onSnapshot(doc(db, 'entertainment', 'number'), (docSnap) => {
@@ -102,8 +113,11 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
         const data = docSnap.data() as NumberState;
         setNumberState(data);
         
+        if (data.minRange !== undefined) setMinRange(data.minRange);
+        if (data.maxRange !== undefined) setMaxRange(data.maxRange);
+        
         if (data.isGenerating) {
-          startAnimation(data.currentNumber);
+          startAnimation(data.currentNumber, data.minRange || 1, data.maxRange || 100);
         } else {
           setDisplayNumber(data.currentNumber);
           setIsAnimating(false);
@@ -113,7 +127,10 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
           setDoc(doc(db, 'entertainment', 'number'), {
             currentNumber: null,
             isGenerating: false,
-            lastUpdated: Date.now()
+            lastUpdated: Date.now(),
+            minRange: 1,
+            maxRange: 100,
+            customNumbers: {}
           });
         }
       }
@@ -122,12 +139,21 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
     return () => unsubNumber();
   }, [isAdminOrMod]);
 
-  const startAnimation = (finalNumber: string | number | null) => {
+  useEffect(() => {
+    if (isAdminOrMod && showAllAccounts) {
+      getAllUsers().then(setUsers).catch(console.error);
+    }
+  }, [isAdminOrMod, showAllAccounts]);
+
+  const startAnimation = (finalNumber: string | number | null, min: number, max: number) => {
     setIsAnimating(true);
     let count = 0;
     const maxCount = 20;
     const interval = setInterval(() => {
-      setDisplayNumber(Math.floor(Math.random() * 1000));
+      // Show random numbers within the range during animation
+      const range = max - min + 1;
+      setDisplayNumber(Math.floor(Math.random() * range) + min);
+      
       count++;
       if (count >= maxCount) {
         clearInterval(interval);
@@ -143,7 +169,11 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
   };
 
   const handleGenerateRandom = async () => {
-    const randomNum = Math.floor(Math.random() * 1000);
+    const min = numberState?.minRange || 1;
+    const max = numberState?.maxRange || 100;
+    const range = max - min + 1;
+    const randomNum = Math.floor(Math.random() * range) + min;
+    
     await updateDoc(doc(db, 'entertainment', 'number'), {
       currentNumber: randomNum,
       isGenerating: true,
@@ -151,18 +181,50 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
     });
   };
 
-  const handleSetCustom = async () => {
-    if (!customNumber.trim()) {
-      toast.error('Masukkan nomor custom');
+  const handleUpdateRange = async () => {
+    if (minRange >= maxRange) {
+      toast.error('Minimal harus lebih kecil dari Maksimal');
       return;
     }
     await updateDoc(doc(db, 'entertainment', 'number'), {
-      currentNumber: customNumber,
-      isGenerating: false,
+      minRange,
+      maxRange,
       lastUpdated: Date.now()
     });
-    setCustomNumber('');
-    toast.success('Nomor custom berhasil diset');
+    toast.success('Rentang nomor berhasil diperbarui');
+    setShowRangeSettings(false);
+  };
+
+  const handleSetUserCustom = async (userId: string, username: string) => {
+    const val = userCustomInputs[userId];
+    if (val === undefined) return;
+
+    const currentCustoms = numberState?.customNumbers || {};
+    const newCustoms = { ...currentCustoms, [userId]: val };
+
+    await updateDoc(doc(db, 'entertainment', 'number'), {
+      customNumbers: newCustoms,
+      lastUpdated: Date.now()
+    });
+    toast.success(`Nomor custom untuk @${username} berhasil diset`);
+  };
+
+  const handleClearUserCustom = async (userId: string, username: string) => {
+    const currentCustoms = { ...(numberState?.customNumbers || {}) };
+    delete currentCustoms[userId];
+
+    await updateDoc(doc(db, 'entertainment', 'number'), {
+      customNumbers: currentCustoms,
+      lastUpdated: Date.now()
+    });
+    
+    setUserCustomInputs(prev => {
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
+    
+    toast.success(`Nomor custom untuk @${username} dihapus`);
   };
 
   if (!numberState) return <div className="p-8 text-center text-slate-500">Memuat nomor...</div>;
@@ -172,35 +234,124 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
       {/* Admin Controls */}
       {isAdminOrMod && (
         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
-          <h3 className="font-bold text-slate-900">Kontrol Nomor (Admin)</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <button
-              onClick={handleGenerateRandom}
-              disabled={isAnimating || numberState.isGenerating}
-              className="py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <RefreshCw className={clsx("w-5 h-5", (isAnimating || numberState.isGenerating) && "animate-spin")} />
-              Berikan Nomor Acak
-            </button>
-            
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-900">Kontrol Nomor (Admin)</h3>
             <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Nomor Custom..."
-                value={customNumber}
-                onChange={(e) => setCustomNumber(e.target.value)}
-                className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm focus:border-emerald-500 outline-none"
-              />
               <button
-                onClick={handleSetCustom}
-                disabled={isAnimating || numberState.isGenerating}
-                className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
+                onClick={() => setShowRangeSettings(!showRangeSettings)}
+                className={clsx(
+                  "p-2 rounded-lg transition-colors",
+                  showRangeSettings ? "bg-emerald-100 text-emerald-600" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                )}
+                title="Kustom Rentang Nomor"
               >
-                Set
+                <Settings className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowAllAccounts(!showAllAccounts)}
+                className={clsx(
+                  "p-2 rounded-lg transition-colors",
+                  showAllAccounts ? "bg-emerald-100 text-emerald-600" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                )}
+                title="Tampilkan Semua Akun"
+              >
+                <Users className="w-5 h-5" />
               </button>
             </div>
           </div>
+          
+          {/* Range Settings */}
+          {showRangeSettings && (
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                <Hash className="w-4 h-4" />
+                Kustom Rentang Nomor
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 font-medium">Minimal</label>
+                  <input
+                    type="number"
+                    value={minRange}
+                    onChange={(e) => setMinRange(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 font-medium">Maksimal</label>
+                  <input
+                    type="number"
+                    value={maxRange}
+                    onChange={(e) => setMaxRange(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleUpdateRange}
+                className="w-full py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors"
+              >
+                Simpan Rentang
+              </button>
+            </div>
+          )}
+
+          {/* User Custom Numbers */}
+          {showAllAccounts && (
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-700 sticky top-0 bg-white pb-2 border-b border-slate-100">
+                <Users className="w-4 h-4" />
+                Atur Nomor Per Akun
+              </div>
+              <div className="space-y-2">
+                {users.map(u => (
+                  <div key={u.id} className="flex items-center justify-between gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{u.name}</p>
+                        <p className="text-[10px] text-slate-500 truncate">@{u.username}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input
+                        type="text"
+                        placeholder="No..."
+                        value={userCustomInputs[u.id] ?? (numberState.customNumbers?.[u.id] || '')}
+                        onChange={(e) => setUserCustomInputs(prev => ({ ...prev, [u.id]: e.target.value }))}
+                        className="w-16 px-2 py-1 border border-slate-200 rounded text-xs focus:border-emerald-500 outline-none"
+                      />
+                      <button
+                        onClick={() => handleSetUserCustom(u.id, u.username)}
+                        className="p-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors"
+                        title="Simpan"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                      </button>
+                      {numberState.customNumbers?.[u.id] && (
+                        <button
+                          onClick={() => handleClearUserCustom(u.id, u.username)}
+                          className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <button
+            onClick={handleGenerateRandom}
+            disabled={isAnimating || numberState.isGenerating}
+            className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={clsx("w-5 h-5", (isAnimating || numberState.isGenerating) && "animate-spin")} />
+            Berikan Nomor Acak ({numberState.minRange || 1} - {numberState.maxRange || 100})
+          </button>
         </div>
       )}
 
@@ -213,15 +364,29 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
             "text-8xl md:text-9xl font-black transition-all duration-300",
             isAnimating ? "text-slate-300 scale-95 blur-sm" : "text-emerald-600 scale-100 blur-0"
           )}>
-            {displayNumber !== null ? displayNumber : '--'}
+            {/* If user has a custom number set, and we are NOT animating, show it? 
+                Wait, the user said "terhubung dengan menu berikan nomor acak".
+                Usually this means the random button picks from the range.
+                But if I set a custom number for a user, maybe they should see it?
+                The requirement is a bit ambiguous. 
+                "diberikan nomor yang bisa diinput sesuai kebutuhan"
+                I'll make it so if a user has a custom number assigned, they see it instead of the global random number.
+            */}
+            {!isAnimating && numberState.customNumbers?.[user.id] !== undefined 
+              ? numberState.customNumbers[user.id] 
+              : (displayNumber !== null ? displayNumber : '--')}
           </div>
           
           {isAnimating && (
             <p className="text-emerald-500 font-bold animate-pulse">Mengacak Nomor...</p>
           )}
           
-          {!isAnimating && displayNumber === null && (
+          {!isAnimating && displayNumber === null && numberState.customNumbers?.[user.id] === undefined && (
             <p className="text-slate-400 italic">Menunggu nomor dari admin...</p>
+          )}
+
+          {!isAnimating && numberState.customNumbers?.[user.id] !== undefined && (
+            <p className="text-emerald-600 font-bold text-xs bg-emerald-50 px-3 py-1 rounded-full">Nomor Khusus Anda</p>
           )}
         </div>
       </div>
