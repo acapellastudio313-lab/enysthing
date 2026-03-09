@@ -4,19 +4,28 @@ import { User } from '../types';
 import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, deleteDoc, serverTimestamp, query, where, orderBy, writeBatch } from 'firebase/firestore';
-import { getAllUsers } from '../lib/db';
+import { getAllUsers, listenToSettings } from '../lib/db';
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 
 export default function Entertainment({ user }: { user: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as 'kuis' | 'spin' | 'number') || 'kuis';
+  const [electionStatus, setElectionStatus] = useState('not_started');
+
+  useEffect(() => {
+    const unsubscribe = listenToSettings((settings) => {
+      setElectionStatus(settings.election_status || 'not_started');
+    });
+    return () => unsubscribe();
+  }, []);
 
   const setActiveTab = (tab: 'kuis' | 'spin' | 'number') => {
     setSearchParams({ tab });
   };
 
   const isAdminOrMod = user.role === 'admin' || user.role === 'moderator';
+  const showBadge = electionStatus === 'in_progress' || electionStatus === 'closed';
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-20 md:pb-0">
@@ -29,9 +38,15 @@ export default function Entertainment({ user }: { user: User }) {
               activeTab === 'kuis' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative">
               <HelpCircle className="w-4 h-4" />
               Kuis Interaktif
+              {showBadge && (
+                <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
+                </span>
+              )}
             </div>
             {activeTab === 'kuis' && (
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full" />
@@ -44,9 +59,15 @@ export default function Entertainment({ user }: { user: User }) {
               activeTab === 'spin' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative">
               <RefreshCw className="w-4 h-4" />
               Putaran Bebas
+              {showBadge && (
+                <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
+                </span>
+              )}
             </div>
             {activeTab === 'spin' && (
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full" />
@@ -59,9 +80,15 @@ export default function Entertainment({ user }: { user: User }) {
               activeTab === 'number' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative">
               <Hash className="w-4 h-4" />
               Dapatkan Nomor
+              {showBadge && (
+                <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
+                </span>
+              )}
             </div>
             {activeTab === 'number' && (
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full" />

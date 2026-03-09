@@ -484,6 +484,32 @@ export const markNotificationsAsRead = async (userId: string) => {
   await batch.commit();
 };
 
+export const notifyAllUsers = async (notificationData: any) => {
+  try {
+    const usersSnapshot = await getDocs(collection(db, "users"));
+    const batch = writeBatch(db);
+    let count = 0;
+    
+    usersSnapshot.docs.forEach(userDoc => {
+      const userRef = userDoc.ref;
+      const notifRef = doc(collection(userRef, "notifications"));
+      batch.set(notifRef, {
+        ...notificationData,
+        user_id: userDoc.id,
+        created_at: serverTimestamp(),
+        is_read: 0
+      });
+      count++;
+    });
+    
+    if (count > 0) {
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error("Error notifying all users:", error);
+  }
+};
+
 export const updatePost = async (postId: string, data: any) => {
   await updateDoc(doc(db, "posts", postId), data);
 };

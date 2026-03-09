@@ -35,6 +35,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [branding, setBranding] = useState({ name: 'Agen Perubahan', subtitle: 'Aplikasi Pemilihan', icon: 'PA', logo: '' });
   const [isNavHidden, setIsNavHidden] = useState(false);
+  const [electionStatus, setElectionStatus] = useState('not_started');
 
   useEffect(() => {
     setIsNavHidden(false);
@@ -57,6 +58,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
         icon: settings.app_icon || 'PA',
         logo: settings.app_logo || ''
       });
+      setElectionStatus(settings.election_status || 'not_started');
     });
 
     return () => unsubscribeSettings();
@@ -106,23 +108,34 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
           </div>
 
           <nav className="flex-1 space-y-2">
-            {navItems.filter(item => !item.mobileOnly).map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  clsx(
-                    'flex items-center gap-4 px-4 py-3 rounded-xl transition-colors font-medium relative',
-                    isActive
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  )
-                }
-              >
-                <item.icon className="w-6 h-6" />
-                {item.label}
-              </NavLink>
-            ))}
+            {navItems.filter(item => !item.mobileOnly).map((item) => {
+              const showBadge = (item.to === '/candidates' || item.to === '/entertainment') && (electionStatus === 'in_progress' || electionStatus === 'closed');
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    clsx(
+                      'flex items-center gap-4 px-4 py-3 rounded-xl transition-colors font-medium relative',
+                      isActive
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    )
+                  }
+                >
+                  <div className="relative">
+                    <item.icon className="w-6 h-6" />
+                    {showBadge && (
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white"></span>
+                      </span>
+                    )}
+                  </div>
+                  {item.label}
+                </NavLink>
+              );
+            })}
           </nav>
 
           <button
@@ -196,23 +209,32 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
       {/* Mobile Bottom Navigation */}
       {!isNavHidden && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-2 z-50 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                clsx(
-                  'flex flex-col items-center gap-1 p-2 rounded-xl transition-colors relative',
-                  isActive ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-900'
-                )
-              }
-            >
-              <div className="relative">
-                <item.icon className="w-6 h-6" />
-              </div>
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const showBadge = (item.to === '/candidates' || item.to === '/entertainment') && (electionStatus === 'in_progress' || electionStatus === 'closed');
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  clsx(
+                    'flex flex-col items-center gap-1 p-2 rounded-xl transition-colors relative',
+                    isActive ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-900'
+                  )
+                }
+              >
+                <div className="relative">
+                  <item.icon className="w-6 h-6" />
+                  {showBadge && (
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white"></span>
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </NavLink>
+            );
+          })}
         </div>
       )}
     </div>

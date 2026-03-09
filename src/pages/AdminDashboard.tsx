@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, MouseEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { User, Post, Candidate, ElectionStatus } from '../types';
 import { Trash2, Shield, UserCheck, Users, FileText, BarChart2, AlertTriangle, Edit3, CheckCircle, X, Trophy, Clock, RefreshCw, RotateCcw, Loader2, UserPlus } from 'lucide-react';
 import { formatDateWIB } from '../utils';
@@ -22,7 +22,8 @@ import {
   updateCandidate,
   createUser,
   getCandidateVoters,
-  uploadBase64ToStorage
+  uploadBase64ToStorage,
+  notifyAllUsers
 } from '../lib/db';
 import { compressImage } from '../utils';
 
@@ -360,6 +361,24 @@ export default function AdminDashboard({ user }: { user: User }) {
       }
 
       await updateSetting('election_status', status);
+      
+      // Notify all users
+      if (status === 'in_progress') {
+        await notifyAllUsers({
+          type: 'system',
+          message: 'Pemilihan telah dimulai! Silakan berikan suara Anda di menu Kandidat.',
+          actor_name: 'Sistem',
+          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff'
+        });
+      } else if (status === 'closed') {
+        await notifyAllUsers({
+          type: 'system',
+          message: 'Pemilihan telah ditutup! Cek hasil akhir di menu Klasemen.',
+          actor_name: 'Sistem',
+          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff'
+        });
+      }
+
       // Do NOT setElectionStatus(status) here again, let the listener handle it
       setStatusMessage({ type: 'success', text: 'Status pemilihan berhasil diperbarui' });
       setTimeout(() => setStatusMessage(null), 3000);
@@ -477,6 +496,29 @@ export default function AdminDashboard({ user }: { user: User }) {
       const updateData: any = { ...editForm };
       if (!updateData.password) {
         delete updateData.password;
+      }
+
+      // Handle role change to candidate
+      if (updateData.role === 'candidate' && editingUser.role !== 'candidate') {
+        const existingCandidate = candidates.find(c => c.user_id === editingUser.id);
+        if (!existingCandidate) {
+          await addCandidate(editingUser.id, {
+            vision: '',
+            mission: '',
+            innovation_program: ''
+          });
+          // Refresh candidates
+          const c = await getCandidates();
+          setCandidates(c);
+        }
+      } else if (updateData.role !== 'candidate' && editingUser.role === 'candidate') {
+        const existingCandidate = candidates.find(c => c.user_id === editingUser.id);
+        if (existingCandidate) {
+          await removeCandidate(existingCandidate.id, editingUser.id);
+          // Refresh candidates
+          const c = await getCandidates();
+          setCandidates(c);
+        }
       }
 
       await updateUser(editingUser.id, updateData);
@@ -1202,7 +1244,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                 {users.map((u, idx) => (
                   <tr key={`${u.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
+                      <Link to={`/profile/${u.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                         <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover" />
                         <div>
                           <div className="font-medium text-slate-900 flex items-center gap-1">
@@ -1212,7 +1254,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                           </div>
                           <div className="text-xs text-slate-500">@{u.username}</div>
                         </div>
-                      </div>
+                      </Link>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-lg text-xs font-bold ${

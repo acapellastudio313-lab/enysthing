@@ -59,6 +59,24 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
     const fetchProfile = async () => {
       if (isOwnProfile) {
         setProfileUser({ ...currentUser });
+        
+        // Auto-fetch location if not set
+        if (!currentUser.location) {
+          try {
+            const res = await fetch('https://ipapi.co/json/');
+            const data = await res.json();
+            if (data.city && data.country_name) {
+              const loc = `${data.city}, ${data.country_name}`;
+              await updateUser(currentUser.id, { location: loc });
+              setProfileUser(prev => prev ? { ...prev, location: loc } : null);
+              if (onUpdateUser) {
+                onUpdateUser({ ...currentUser, location: loc });
+              }
+            }
+          } catch (e) {
+            console.error('Failed to fetch location:', e);
+          }
+        }
       } else {
         try {
           const user = await getUser(targetUserId);
