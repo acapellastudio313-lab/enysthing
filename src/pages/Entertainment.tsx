@@ -87,6 +87,7 @@ export default function Entertainment({ user }: { user: User }) {
 
 interface NumberState {
   currentNumber: string | number | null;
+  userNumbers?: Record<string, string | number>;
   isGenerating: boolean;
   lastUpdated: number | null;
   minRange?: number;
@@ -116,10 +117,12 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
         if (data.minRange !== undefined) setMinRange(data.minRange);
         if (data.maxRange !== undefined) setMaxRange(data.maxRange);
         
+        const myNumber = data.customNumbers?.[user.id] ?? data.userNumbers?.[user.id] ?? data.currentNumber;
+
         if (data.isGenerating) {
-          startAnimation(data.currentNumber, data.minRange || 1, data.maxRange || 100);
+          startAnimation(myNumber, data.minRange || 1, data.maxRange || 100);
         } else {
-          setDisplayNumber(data.currentNumber);
+          setDisplayNumber(myNumber);
           setIsAnimating(false);
         }
       } else {
@@ -172,10 +175,17 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
     const min = numberState?.minRange || 1;
     const max = numberState?.maxRange || 100;
     const range = max - min + 1;
-    const randomNum = Math.floor(Math.random() * range) + min;
+    
+    // Get all users to assign unique-ish random numbers
+    const allUsers = await getAllUsers();
+    const newUserNumbers: Record<string, number> = {};
+    
+    allUsers.forEach(u => {
+      newUserNumbers[u.id] = Math.floor(Math.random() * range) + min;
+    });
     
     await updateDoc(doc(db, 'entertainment', 'number'), {
-      currentNumber: randomNum,
+      userNumbers: newUserNumbers,
       isGenerating: true,
       lastUpdated: Date.now()
     });
@@ -204,6 +214,7 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
 
     await updateDoc(doc(db, 'entertainment', 'number'), {
       customNumbers: newCustoms,
+      isGenerating: true,
       lastUpdated: Date.now()
     });
     toast.success(`Nomor custom untuk @${username} berhasil diset`);
@@ -215,6 +226,7 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
 
     await updateDoc(doc(db, 'entertainment', 'number'), {
       customNumbers: currentCustoms,
+      isGenerating: true,
       lastUpdated: Date.now()
     });
     
@@ -364,29 +376,15 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
             "text-8xl md:text-9xl font-black transition-all duration-300",
             isAnimating ? "text-slate-300 scale-95 blur-sm" : "text-emerald-600 scale-100 blur-0"
           )}>
-            {/* If user has a custom number set, and we are NOT animating, show it? 
-                Wait, the user said "terhubung dengan menu berikan nomor acak".
-                Usually this means the random button picks from the range.
-                But if I set a custom number for a user, maybe they should see it?
-                The requirement is a bit ambiguous. 
-                "diberikan nomor yang bisa diinput sesuai kebutuhan"
-                I'll make it so if a user has a custom number assigned, they see it instead of the global random number.
-            */}
-            {!isAnimating && numberState.customNumbers?.[user.id] !== undefined 
-              ? numberState.customNumbers[user.id] 
-              : (displayNumber !== null ? displayNumber : '--')}
+            {displayNumber !== null ? displayNumber : '--'}
           </div>
           
           {isAnimating && (
             <p className="text-emerald-500 font-bold animate-pulse">Mengacak Nomor...</p>
           )}
           
-          {!isAnimating && displayNumber === null && numberState.customNumbers?.[user.id] === undefined && (
+          {!isAnimating && displayNumber === null && (
             <p className="text-slate-400 italic">Menunggu nomor dari admin...</p>
-          )}
-
-          {!isAnimating && numberState.customNumbers?.[user.id] !== undefined && (
-            <p className="text-emerald-600 font-bold text-xs bg-emerald-50 px-3 py-1 rounded-full">Nomor Khusus Anda</p>
           )}
         </div>
       </div>
