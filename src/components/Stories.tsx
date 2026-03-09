@@ -335,17 +335,15 @@ function StoryViewer({
                   <p className="text-slate-400 text-center mt-4">Belum ada yang melihat cerita ini.</p>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {currentStory.views?.filter(v => v.id !== currentUser.id)
-                      .filter((viewer, index, self) => index === self.findIndex(v => v.id === viewer.id))
-                      .map(viewer => (
-                        <div key={viewer.id} className="flex items-center gap-3">
-                          <img src={viewer.avatar} alt={viewer.name} className="w-10 h-10 rounded-full" />
-                          <div>
-                            <p className="text-white font-medium">{viewer.name}</p>
-                            <p className="text-slate-400 text-xs">{formatDateWIB(viewer.viewed_at)}</p>
-                          </div>
+                    {currentStory.views?.filter(v => v.id !== currentUser.id).map(viewer => (
+                      <div key={viewer.id} className="flex items-center gap-3">
+                        <img src={viewer.avatar} alt={viewer.name} className="w-10 h-10 rounded-full" />
+                        <div>
+                          <p className="text-white font-medium">{viewer.name}</p>
+                          <p className="text-slate-400 text-xs">{formatDateWIB(viewer.viewed_at)}</p>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -364,7 +362,7 @@ export default function Stories({ user }: { user: User }) {
   const [showUpload, setShowUpload] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadMedia, setUploadMedia] = useState<{ url: string, type: 'image' | 'video', file?: File | Blob } | null>(null);
+  const [uploadMedia, setUploadMedia] = useState<{ url: string, type: 'image' | 'video', file?: File } | null>(null);
   
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   
@@ -414,9 +412,7 @@ export default function Stories({ user }: { user: User }) {
         groups[story.user_id].stories.push(story);
       });
       
-      // Ensure unique groups by user_id
-      const finalGroups = Object.values(groups);
-      setStoryGroups(finalGroups);
+      setStoryGroups(Object.values(groups));
     });
 
     return () => unsubscribe();
@@ -501,7 +497,7 @@ export default function Stories({ user }: { user: User }) {
     }
   }, [showCamera, cameraStream]);
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (videoRef.current) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
@@ -515,13 +511,15 @@ export default function Stories({ user }: { user: User }) {
         }
         ctx.drawImage(videoRef.current, 0, 0);
         const url = canvas.toDataURL('image/jpeg');
-        canvas.toBlob((blob) => {
-          if (blob) {
-            setUploadMedia({ url, type: 'image', file: blob });
-            stopCamera();
-            setShowUpload(true);
-          }
-        }, 'image/jpeg', 0.8);
+        
+        // Convert base64 to File
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], `story_${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+        setUploadMedia({ url, type: 'image', file });
+        stopCamera();
+        setShowUpload(true);
       }
     }
   };
@@ -540,7 +538,8 @@ export default function Stories({ user }: { user: User }) {
         const mimeType = mediaRecorder.mimeType || 'video/webm';
         const blob = new Blob(chunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
-        setUploadMedia({ url, type: 'video', file: blob });
+        const file = new File([blob], `story_${Date.now()}.webm`, { type: mimeType });
+        setUploadMedia({ url, type: 'video', file });
         stopCamera();
         setShowUpload(true);
       };
@@ -604,21 +603,18 @@ export default function Stories({ user }: { user: User }) {
     
     setIsUploading(true);
     try {
-      let finalMediaUrl = uploadMedia.url;
-      
+      let mediaUrl = uploadMedia.url;
+      let mediaFileId = null;
+
       if (uploadMedia.file) {
-        const path = uploadMedia.type === 'video' ? `stories/videos/${Date.now()}.webm` : `stories/images/${Date.now()}.jpg`;
-        finalMediaUrl = await uploadFile(uploadMedia.file, path);
-      } else if (uploadMedia.url.startsWith('data:image')) {
-        // Fallback for data URLs if file object is missing
-        const response = await fetch(uploadMedia.url);
-        const blob = await response.blob();
-        finalMediaUrl = await uploadFile(blob, `stories/images/${Date.now()}.jpg`);
+        mediaFileId = await uploadFile(uploadMedia.file);
+        mediaUrl = ''; // We'll use getFileFromChunks later
       }
 
       await createStory({
         user_id: user.id,
-        media_url: finalMediaUrl,
+        media_url: mediaUrl,
+        media_file_id: mediaFileId,
         media_type: uploadMedia.type,
         text_overlays: textOverlay ? [textOverlay] : [],
         tags: taggedUsers
@@ -632,7 +628,7 @@ export default function Stories({ user }: { user: User }) {
       setIsEditingText(false);
     } catch (e) {
       console.error(e);
-      alert('Gagal mengunggah cerita: ' + (e instanceof Error ? e.message : 'Kesalahan tidak diketahui'));
+      alert('Gagal mengunggah cerita. Silakan coba lagi.');
     } finally {
       setIsUploading(false);
     }

@@ -164,6 +164,8 @@ export const uploadFileChunks = async (file: File, onProgress?: (progress: numbe
   return fileId;
 };
 
+export const uploadFile = uploadFileChunks;
+
 export const deleteFileChunks = async (fileId: string) => {
   try {
     const batch = writeBatch(db);
@@ -356,9 +358,17 @@ export const listenToStories = (callback: (stories: Story[]) => void) => {
     const stories = await Promise.all(snapshot.docs.map(async (storyDoc) => {
       const data = storyDoc.data();
       const author = await getUser(data.user_id);
+      
+      let mediaUrl = data.media_url;
+      if (data.media_file_id) {
+        const assembledUrl = await getFileFromChunks(data.media_file_id);
+        if (assembledUrl) mediaUrl = assembledUrl;
+      }
+
       return {
         id: storyDoc.id,
         ...data,
+        media_url: mediaUrl,
         user_name: author?.name || "Unknown",
         user_avatar: author?.avatar || "",
         created_at: data.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
