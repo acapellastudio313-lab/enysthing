@@ -3,8 +3,16 @@ import { User, Message, Conversation } from '../types';
 import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus, Paperclip, X, FileText, Image as ImageIcon, Video, Trash2, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB, compressImage } from '../utils';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { getAllUsers, listenToConversations, listenToMessages, sendMessage, markAsRead, deleteMessage, uploadFileChunks, getFileFromChunks } from '../lib/db';
-// Force file change for GitHub sync
+import { 
+  getAllUsers, 
+  listenToConversations, 
+  listenToMessages, 
+  sendMessage, 
+  markAsRead, 
+  deleteMessage, 
+  uploadFileChunks, 
+  getFileFromChunks 
+} from '../lib/db';
 
 export default function Messages({ user }: { user: User }) {
   const location = useLocation();

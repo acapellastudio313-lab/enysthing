@@ -8,8 +8,17 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import EditPostModal from './EditPostModal';
 import { toast } from 'sonner';
-import { addComment, listenToComments, likePost, checkIsLiked, deletePost, deleteComment, updateComment, getPostLikers, getFileFromChunks } from '../lib/db';
-// Force file change for GitHub sync
+import { 
+  addComment, 
+  listenToComments, 
+  likePost, 
+  checkIsLiked, 
+  deletePost, 
+  deleteComment, 
+  updateComment, 
+  getPostLikers, 
+  getFileFromChunks 
+} from '../lib/db';
 import { getLocalMedia } from '../lib/mediaCache';
 
 interface PostItemProps {
