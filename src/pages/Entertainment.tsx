@@ -1,19 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { User } from '../types';
-import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Dices, Loader2 } from 'lucide-react';
+import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, deleteDoc, serverTimestamp, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
-import { triggerLuckyNumberEvent, assignLuckyNumbers, listenToLuckyNumberEvent, getAllUsers, updateUserLuckyNumber, updateLuckyNumberPool, listenToLuckyNumberPool } from '../lib/db';
-import { motion, AnimatePresence } from 'motion/react';
 
 export default function Entertainment({ user }: { user: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as 'kuis' | 'spin' | 'lucky') || 'kuis';
+  const activeTab = (searchParams.get('tab') as 'kuis' | 'spin' | 'number') || 'kuis';
 
-  const setActiveTab = (tab: 'kuis' | 'spin' | 'lucky') => {
+  const setActiveTab = (tab: 'kuis' | 'spin' | 'number') => {
     setSearchParams({ tab });
   };
 
@@ -22,11 +20,11 @@ export default function Entertainment({ user }: { user: User }) {
   return (
     <div className="w-full max-w-2xl mx-auto pb-20 md:pb-0">
       <div className="bg-white sticky top-[60px] z-20 border-b border-slate-100 px-4 pt-2">
-        <div className="flex gap-4 overflow-x-auto no-scrollbar">
+        <div className="flex gap-4">
           <button
             onClick={() => setActiveTab('kuis')}
             className={clsx(
-              "pb-3 font-bold text-sm transition-colors relative shrink-0",
+              "pb-3 font-bold text-sm transition-colors relative",
               activeTab === 'kuis' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
@@ -41,7 +39,7 @@ export default function Entertainment({ user }: { user: User }) {
           <button
             onClick={() => setActiveTab('spin')}
             className={clsx(
-              "pb-3 font-bold text-sm transition-colors relative shrink-0",
+              "pb-3 font-bold text-sm transition-colors relative",
               activeTab === 'spin' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
@@ -54,17 +52,17 @@ export default function Entertainment({ user }: { user: User }) {
             )}
           </button>
           <button
-            onClick={() => setActiveTab('lucky')}
+            onClick={() => setActiveTab('number')}
             className={clsx(
-              "pb-3 font-bold text-sm transition-colors relative shrink-0",
-              activeTab === 'lucky' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
+              "pb-3 font-bold text-sm transition-colors relative",
+              activeTab === 'number' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
             <div className="flex items-center gap-2">
               <Hash className="w-4 h-4" />
               Dapatkan Nomor
             </div>
-            {activeTab === 'lucky' && (
+            {activeTab === 'number' && (
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full" />
             )}
           </button>
@@ -77,8 +75,155 @@ export default function Entertainment({ user }: { user: User }) {
         ) : activeTab === 'spin' ? (
           <SpinSection user={user} isAdminOrMod={isAdminOrMod} />
         ) : (
-          <LuckyNumberSection user={user} isAdminOrMod={isAdminOrMod} />
+          <NumberSection user={user} isAdminOrMod={isAdminOrMod} />
         )}
+      </div>
+    </div>
+  );
+}
+
+// --- NUMBER GENERATOR SECTION ---
+
+interface NumberState {
+  currentNumber: string | number | null;
+  isGenerating: boolean;
+  lastUpdated: number | null;
+}
+
+function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
+  const [numberState, setNumberState] = useState<NumberState | null>(null);
+  const [customNumber, setCustomNumber] = useState('');
+  const [displayNumber, setDisplayNumber] = useState<string | number | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    const unsubNumber = onSnapshot(doc(db, 'entertainment', 'number'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as NumberState;
+        setNumberState(data);
+        
+        if (data.isGenerating) {
+          startAnimation(data.currentNumber);
+        } else {
+          setDisplayNumber(data.currentNumber);
+          setIsAnimating(false);
+        }
+      } else {
+        if (isAdminOrMod) {
+          setDoc(doc(db, 'entertainment', 'number'), {
+            currentNumber: null,
+            isGenerating: false,
+            lastUpdated: Date.now()
+          });
+        }
+      }
+    });
+
+    return () => unsubNumber();
+  }, [isAdminOrMod]);
+
+  const startAnimation = (finalNumber: string | number | null) => {
+    setIsAnimating(true);
+    let count = 0;
+    const maxCount = 20;
+    const interval = setInterval(() => {
+      setDisplayNumber(Math.floor(Math.random() * 1000));
+      count++;
+      if (count >= maxCount) {
+        clearInterval(interval);
+        setDisplayNumber(finalNumber);
+        setIsAnimating(false);
+        if (isAdminOrMod) {
+          updateDoc(doc(db, 'entertainment', 'number'), {
+            isGenerating: false
+          });
+        }
+      }
+    }, 100);
+  };
+
+  const handleGenerateRandom = async () => {
+    const randomNum = Math.floor(Math.random() * 1000);
+    await updateDoc(doc(db, 'entertainment', 'number'), {
+      currentNumber: randomNum,
+      isGenerating: true,
+      lastUpdated: Date.now()
+    });
+  };
+
+  const handleSetCustom = async () => {
+    if (!customNumber.trim()) {
+      toast.error('Masukkan nomor custom');
+      return;
+    }
+    await updateDoc(doc(db, 'entertainment', 'number'), {
+      currentNumber: customNumber,
+      isGenerating: false,
+      lastUpdated: Date.now()
+    });
+    setCustomNumber('');
+    toast.success('Nomor custom berhasil diset');
+  };
+
+  if (!numberState) return <div className="p-8 text-center text-slate-500">Memuat nomor...</div>;
+
+  return (
+    <div className="space-y-6">
+      {/* Admin Controls */}
+      {isAdminOrMod && (
+        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
+          <h3 className="font-bold text-slate-900">Kontrol Nomor (Admin)</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              onClick={handleGenerateRandom}
+              disabled={isAnimating || numberState.isGenerating}
+              className="py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCw className={clsx("w-5 h-5", (isAnimating || numberState.isGenerating) && "animate-spin")} />
+              Berikan Nomor Acak
+            </button>
+            
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Nomor Custom..."
+                value={customNumber}
+                onChange={(e) => setCustomNumber(e.target.value)}
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm focus:border-emerald-500 outline-none"
+              />
+              <button
+                onClick={handleSetCustom}
+                disabled={isAnimating || numberState.isGenerating}
+                className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
+              >
+                Set
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Number Display */}
+      <div className="bg-white p-12 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[300px]">
+        <div className="text-center space-y-4">
+          <p className="text-slate-500 font-medium uppercase tracking-widest text-sm">Nomor Anda Saat Ini</p>
+          
+          <div className={clsx(
+            "text-8xl md:text-9xl font-black transition-all duration-300",
+            isAnimating ? "text-slate-300 scale-95 blur-sm" : "text-emerald-600 scale-100 blur-0"
+          )}>
+            {displayNumber !== null ? displayNumber : '--'}
+          </div>
+          
+          {isAnimating && (
+            <p className="text-emerald-500 font-bold animate-pulse">Mengacak Nomor...</p>
+          )}
+          
+          {!isAnimating && displayNumber === null && (
+            <p className="text-slate-400 italic">Menunggu nomor dari admin...</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -457,10 +602,7 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
                 </div>
               ))}
               <button
-                onClick={() => {
-                  const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                  setEditQuestions([...editQuestions, { id: newId, type: 'multiple_choice', text: '', options: ['A', 'B'], timeLimit: 30 }]);
-                }}
+                onClick={() => setEditQuestions([...editQuestions, { id: Date.now().toString(), type: 'multiple_choice', text: '', options: ['A', 'B'], timeLimit: 30 }])}
                 className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 font-bold hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-5 h-5" /> Tambah Soal
@@ -649,329 +791,6 @@ interface SpinState {
 }
 
 const DEFAULT_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-
-// --- LUCKY NUMBER SECTION ---
-
-function LuckyNumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
-  const [event, setEvent] = useState<any>(null);
-  const [rollingNumber, setRollingNumber] = useState(0);
-  const [isRolling, setIsRolling] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [currentUserLuckyNumber, setCurrentUserLuckyNumber] = useState<number | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [pool, setPool] = useState({ min: 1, max: 100 });
-  const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
-  const [showUserList, setShowUserList] = useState(false);
-  const [showPoolSettings, setShowPoolSettings] = useState(false);
-
-  useEffect(() => {
-    const unsubscribeEvent = listenToLuckyNumberEvent((data) => {
-      setEvent(data);
-      if (data.status === 'rolling') {
-        startRollingAnimation();
-      }
-    });
-
-    const unsubscribeUser = onSnapshot(doc(db, 'users', user.id), (docSnap) => {
-      if (docSnap.exists()) {
-        setCurrentUserLuckyNumber(docSnap.data().lucky_number || null);
-      }
-    });
-
-    const unsubscribePool = listenToLuckyNumberPool((data) => {
-      setPool(data);
-    });
-
-    if (isAdminOrMod) {
-      getAllUsers().then(allUsers => {
-        // Ensure uniqueness by ID
-        const uniqueUsers = allUsers.filter((u, index, self) => 
-          index === self.findIndex((t) => t.id === u.id)
-        );
-        setUsers(uniqueUsers);
-      }).catch(console.error);
-    }
-
-    return () => {
-      unsubscribeEvent();
-      unsubscribeUser();
-      unsubscribePool();
-    };
-  }, [user.id, isAdminOrMod]);
-
-  const startRollingAnimation = () => {
-    setIsRolling(true);
-    const duration = 3000; // 3 seconds
-    const interval = 50; // 50ms
-    const steps = duration / interval;
-    let currentStep = 0;
-
-    const timer = setInterval(() => {
-      setRollingNumber(Math.floor(Math.random() * (pool.max - pool.min + 1)) + pool.min);
-      currentStep++;
-      if (currentStep >= steps) {
-        clearInterval(timer);
-        setIsRolling(false);
-      }
-    }, interval);
-  };
-
-  const handleTriggerRandom = async () => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    try {
-      await triggerLuckyNumberEvent('random');
-      // Wait for animation to finish before assigning numbers in DB
-      setTimeout(async () => {
-        await assignLuckyNumbers('random', undefined, pool);
-        setIsProcessing(false);
-        toast.success('Nomor acak berhasil diberikan ke semua akun!');
-      }, 3000);
-    } catch (err) {
-      console.error(err);
-      toast.error('Gagal memberikan nomor acak');
-      setIsProcessing(false);
-    }
-  };
-
-  const handleUpdateUserNumber = async (targetUserId: string) => {
-    const val = parseInt(customInputs[targetUserId]);
-    if (isNaN(val)) {
-      toast.error('Masukkan nomor yang valid');
-      return;
-    }
-    try {
-      await updateUserLuckyNumber(targetUserId, val);
-      toast.success('Nomor berhasil diperbarui');
-    } catch (err) {
-      console.error(err);
-      toast.error('Gagal memperbarui nomor');
-    }
-  };
-
-  const handleSavePool = async () => {
-    try {
-      await updateLuckyNumberPool(pool.min, pool.max);
-      setShowPoolSettings(false);
-      toast.success('Rentang nomor berhasil disimpan');
-    } catch (err) {
-      console.error(err);
-      toast.error('Gagal menyimpan rentang nomor');
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Admin Controls */}
-      {isAdminOrMod && (
-        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2">
-              <Hash className="w-5 h-5 text-emerald-600" />
-              Kontrol Nomor Beruntung (Admin)
-            </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowPoolSettings(!showPoolSettings)}
-                className={clsx(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
-                  showPoolSettings ? "bg-emerald-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                Kustom Nomor ({pool.min}-{pool.max})
-              </button>
-              <button
-                onClick={() => setShowUserList(!showUserList)}
-                className={clsx(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
-                  showUserList ? "bg-emerald-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                Atur Per Akun
-              </button>
-            </div>
-          </div>
-          
-          <AnimatePresence>
-            {showPoolSettings && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden mb-6"
-              >
-                <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-4">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pengaturan Rentang Nomor Acak</p>
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1 space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase">Min</label>
-                      <input
-                        type="number"
-                        value={pool.min}
-                        onChange={(e) => setPool({ ...pool, min: parseInt(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase">Max</label>
-                      <input
-                        type="number"
-                        value={pool.max}
-                        onChange={(e) => setPool({ ...pool, max: parseInt(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <button
-                      onClick={handleSavePool}
-                      className="mt-5 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800"
-                    >
-                      Simpan
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {showUserList && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden mb-6"
-              >
-                <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-4 max-h-[400px] overflow-y-auto no-scrollbar">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Daftar Akun & Nomor Kustom</p>
-                  <div className="space-y-2">
-                    {users.map((u, idx) => (
-                      <div key={`${u.id}-${idx}`} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-all">
-                        <div className="flex items-center gap-3">
-                          <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full border border-slate-200" />
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 leading-none">{u.name}</p>
-                            <p className="text-[10px] text-slate-500 font-medium">@{u.username}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            placeholder={u.lucky_number?.toString() || "000"}
-                            value={customInputs[u.id] || ''}
-                            onChange={(e) => setCustomInputs({ ...customInputs, [u.id]: e.target.value })}
-                            className="w-20 px-2 py-1 border border-slate-200 rounded-lg text-xs font-mono text-center"
-                          />
-                          <button
-                            onClick={() => handleUpdateUserNumber(u.id)}
-                            className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="flex flex-col items-center justify-center p-8 bg-white border-2 border-dashed border-slate-300 rounded-3xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group cursor-pointer"
-            onClick={handleTriggerRandom}
-          >
-            <div className={clsx(
-              "w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-all",
-              isProcessing ? "bg-emerald-100 text-emerald-600 animate-pulse" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600"
-            )}>
-              <Dices className="w-8 h-8" />
-            </div>
-            <span className="font-black text-xl text-slate-900">Berikan Nomor Acak</span>
-            <p className="text-sm text-slate-500 mt-1 text-center max-w-[240px]">
-              Klik untuk mengacak nomor untuk semua akun berdasarkan rentang <span className="font-bold text-emerald-600">{pool.min}-{pool.max}</span>
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Display Section */}
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[400px]">
-        {/* Background Decoration */}
-        <div className="absolute top-0 left-0 w-full h-full opacity-[0.03] pointer-events-none">
-          <div className="absolute top-10 left-10 rotate-12"><Hash className="w-20 h-20" /></div>
-          <div className="absolute bottom-10 right-10 -rotate-12"><Dices className="w-24 h-24" /></div>
-        </div>
-
-        <AnimatePresence mode="wait">
-          {isRolling ? (
-            <motion.div
-              key="rolling"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.2 }}
-              className="space-y-4"
-            >
-              <div className="text-6xl md:text-8xl font-black text-emerald-600 font-mono tracking-tighter">
-                {rollingNumber.toString().padStart(3, '0')}
-              </div>
-              <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-sm">
-                Mengacak Nomor...
-              </p>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="result"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {currentUserLuckyNumber ? (
-                <>
-                  <div className="inline-block px-4 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
-                    Nomor Anda
-                  </div>
-                  <div className="text-7xl md:text-9xl font-black text-slate-900 font-mono tracking-tighter drop-shadow-sm">
-                    {currentUserLuckyNumber.toString().padStart(3, '0')}
-                  </div>
-                  <p className="text-slate-500 max-w-xs mx-auto text-sm leading-relaxed">
-                    Ini adalah nomor beruntung Anda. Simpan nomor ini untuk kejutan menarik selanjutnya!
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Hash className="w-12 h-12 text-slate-300" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900">Belum Ada Nomor</h3>
-                  <p className="text-slate-500 max-w-xs mx-auto text-sm">
-                    Tunggu Admin atau Moderator memberikan nomor beruntung untuk Anda.
-                  </p>
-                </>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {isProcessing && !isRolling && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center z-10">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-              <p className="text-sm font-bold text-slate-700">Memproses Data...</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Info Card */}
-      <div className="bg-emerald-600 p-6 rounded-2xl text-white">
-        <h4 className="font-bold mb-2 flex items-center gap-2">
-          <Trophy className="w-5 h-5" />
-          Tentang Dapatkan Nomor
-        </h4>
-        <p className="text-sm text-emerald-50 opacity-90 leading-relaxed">
-          Fitur ini digunakan untuk pembagian nomor undian, nomor antrian, atau identitas unik lainnya secara instan dan transparan. Semua proses dilakukan secara real-time.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
   const [spinState, setSpinState] = useState<SpinState | null>(null);
@@ -1375,8 +1194,7 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
                   onChange={(e) => setNewItemText(e.target.value)}
                   onKeyDown={async (e) => {
                     if (e.key === 'Enter' && newItemText.trim()) {
-                      const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                      const newItems = [...editItems, { id: newId, text: newItemText.trim(), color: DEFAULT_COLORS[editItems.length % DEFAULT_COLORS.length] }];
+                      const newItems = [...editItems, { id: Date.now().toString(), text: newItemText.trim(), color: DEFAULT_COLORS[editItems.length % DEFAULT_COLORS.length] }];
                       setEditItems(newItems);
                       setNewItemText('');
                       await updateDoc(doc(db, 'entertainment', 'spin'), { items: newItems });
@@ -1387,8 +1205,7 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
                 <button
                   onClick={async () => {
                     if (newItemText.trim()) {
-                      const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                      const newItems = [...editItems, { id: newId, text: newItemText.trim(), color: DEFAULT_COLORS[editItems.length % DEFAULT_COLORS.length] }];
+                      const newItems = [...editItems, { id: Date.now().toString(), text: newItemText.trim(), color: DEFAULT_COLORS[editItems.length % DEFAULT_COLORS.length] }];
                       setEditItems(newItems);
                       setNewItemText('');
                       await updateDoc(doc(db, 'entertainment', 'spin'), { items: newItems });
