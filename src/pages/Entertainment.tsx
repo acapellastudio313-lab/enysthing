@@ -108,6 +108,8 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
   const [maxRange, setMaxRange] = useState(100);
   const [userCustomInputs, setUserCustomInputs] = useState<Record<string, string>>({});
 
+  const [lastAnimatedAt, setLastAnimatedAt] = useState(0);
+
   useEffect(() => {
     const unsubNumber = onSnapshot(doc(db, 'entertainment', 'number'), (docSnap) => {
       if (docSnap.exists()) {
@@ -119,9 +121,11 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
         
         const myNumber = data.customNumbers?.[user.id] ?? data.userNumbers?.[user.id] ?? data.currentNumber;
 
-        if (data.isGenerating) {
+        // Trigger animation if isGenerating is true AND lastUpdated is newer than our last animation
+        if (data.isGenerating && data.lastUpdated && data.lastUpdated > lastAnimatedAt) {
+          setLastAnimatedAt(data.lastUpdated);
           startAnimation(myNumber, data.minRange || 1, data.maxRange || 100);
-        } else {
+        } else if (!data.isGenerating) {
           setDisplayNumber(myNumber);
           setIsAnimating(false);
         }
@@ -153,7 +157,6 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
     let count = 0;
     const maxCount = 20;
     const interval = setInterval(() => {
-      // Show random numbers within the range during animation
       const range = max - min + 1;
       setDisplayNumber(Math.floor(Math.random() * range) + min);
       
@@ -162,11 +165,6 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
         clearInterval(interval);
         setDisplayNumber(finalNumber);
         setIsAnimating(false);
-        if (isAdminOrMod) {
-          updateDoc(doc(db, 'entertainment', 'number'), {
-            isGenerating: false
-          });
-        }
       }
     }, 100);
   };
@@ -176,19 +174,37 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
     const max = numberState?.maxRange || 100;
     const range = max - min + 1;
     
-    // Get all users to assign unique-ish random numbers
+    // Get all users to assign unique random numbers
     const allUsers = await getAllUsers();
     const newUserNumbers: Record<string, number> = {};
     
-    allUsers.forEach(u => {
-      newUserNumbers[u.id] = Math.floor(Math.random() * range) + min;
+    // Create a shuffled array of numbers in the range
+    const availableNumbers = Array.from({ length: Math.min(range, 2000) }, (_, i) => i + min);
+    for (let i = availableNumbers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [availableNumbers[i], availableNumbers[j]] = [availableNumbers[j], availableNumbers[i]];
+    }
+    
+    allUsers.forEach((u, index) => {
+      // Use unique number from shuffled array, or random if range exceeded
+      if (index < availableNumbers.length) {
+        newUserNumbers[u.id] = availableNumbers[index];
+      } else {
+        newUserNumbers[u.id] = Math.floor(Math.random() * range) + min;
+      }
     });
     
     await updateDoc(doc(db, 'entertainment', 'number'), {
       userNumbers: newUserNumbers,
+      currentNumber: null,
       isGenerating: true,
       lastUpdated: Date.now()
     });
+
+    // Reset generating flag after animation duration
+    setTimeout(() => {
+      updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
+    }, 3000);
   };
 
   const handleUpdateRange = async () => {
@@ -217,6 +233,12 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
       isGenerating: true,
       lastUpdated: Date.now()
     });
+    
+    // Reset generating flag after animation duration
+    setTimeout(() => {
+      updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
+    }, 3000);
+
     toast.success(`Nomor custom untuk @${username} berhasil diset`);
   };
 
@@ -229,6 +251,11 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
       isGenerating: true,
       lastUpdated: Date.now()
     });
+    
+    // Reset generating flag after animation duration
+    setTimeout(() => {
+      updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
+    }, 3000);
     
     setUserCustomInputs(prev => {
       const next = { ...prev };
@@ -326,12 +353,15 @@ function NumberSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boole
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      <div className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                        {numberState.customNumbers?.[u.id] ?? numberState.userNumbers?.[u.id] ?? '--'}
+                      </div>
                       <input
                         type="text"
                         placeholder="No..."
                         value={userCustomInputs[u.id] ?? (numberState.customNumbers?.[u.id] || '')}
                         onChange={(e) => setUserCustomInputs(prev => ({ ...prev, [u.id]: e.target.value }))}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded text-xs focus:border-emerald-500 outline-none"
+                        className="w-12 px-2 py-1 border border-slate-200 rounded text-xs focus:border-emerald-500 outline-none"
                       />
                       <button
                         onClick={() => handleSetUserCustom(u.id, u.username)}
