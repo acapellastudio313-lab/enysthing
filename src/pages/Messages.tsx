@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import { User, Message, Conversation } from '../types';
 import { Send, Search, ArrowLeft, MoreVertical, MessageSquare, Plus, UserPlus, Paperclip, X, FileText, Image as ImageIcon, Video, Trash2, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { formatDateWIB, formatTimeWIB, formatDateOnlyWIB, compressImage } from '../utils';
@@ -10,6 +10,7 @@ import {
   sendMessage, 
   markAsRead, 
   deleteMessage, 
+  deleteConversation,
   uploadFileChunks, 
   getFileFromChunks 
 } from '../lib/db';
@@ -186,6 +187,20 @@ export default function Messages({ user }: { user: User }) {
     }
   };
 
+  const handleDeleteConversation = async (e: React.MouseEvent, otherUserId: string) => {
+    e.stopPropagation();
+    if (window.confirm('Hapus seluruh percakapan ini?')) {
+      try {
+        await deleteConversation(user.id, otherUserId);
+        if (selectedConversation?.id === otherUserId) {
+          setSelectedConversation(null);
+        }
+      } catch (err) {
+        console.error('Failed to delete conversation', err);
+      }
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -276,31 +291,39 @@ export default function Messages({ user }: { user: User }) {
             )
           ) : filteredConversations.length > 0 ? (
             filteredConversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => updateSelectedConversation(conv)}
-                className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors border-b border-slate-50 ${selectedConversation?.id === conv.id ? 'bg-emerald-50/50' : ''}`}
-              >
-                <div className="relative shrink-0">
-                  <img src={conv.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={conv.name} className="w-12 h-12 rounded-full object-cover" />
-                  {conv.unread_count > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                      {conv.unread_count}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="flex justify-between items-baseline mb-0.5">
-                    <h3 className="font-bold text-slate-900 truncate text-sm">{conv.name}</h3>
-                    <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                      {formatDateWIB(conv.last_message_time)}
-                    </span>
+              <div key={conv.id} className="relative group">
+                <button
+                  onClick={() => updateSelectedConversation(conv)}
+                  className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors border-b border-slate-50 ${selectedConversation?.id === conv.id ? 'bg-emerald-50/50' : ''}`}
+                >
+                  <div className="relative shrink-0">
+                    <img src={conv.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={conv.name} className="w-12 h-12 rounded-full object-cover" />
+                    {conv.unread_count > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                        {conv.unread_count}
+                      </span>
+                    )}
                   </div>
-                  <p className={`text-xs truncate ${conv.unread_count > 0 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
-                    {conv.last_message}
-                  </p>
-                </div>
-              </button>
+                  <div className="flex-1 text-left min-w-0 pr-8">
+                    <div className="flex justify-between items-baseline mb-0.5">
+                      <h3 className="font-bold text-slate-900 truncate text-sm">{conv.name}</h3>
+                      <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                        {formatDateWIB(conv.last_message_time)}
+                      </span>
+                    </div>
+                    <p className={`text-xs truncate ${conv.unread_count > 0 ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
+                      {conv.last_message}
+                    </p>
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => handleDeleteConversation(e, conv.id)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                  title="Hapus Percakapan"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             ))
           ) : (
             <div className="p-8 text-center">

@@ -946,6 +946,24 @@ export const deleteMessage = async (userId: string, otherUserId: string, message
   await deleteDoc(doc(db, "conversations", conversationId, "messages", messageId));
 };
 
+export const deleteConversation = async (userId: string, otherUserId: string) => {
+  const conversationId = [userId, otherUserId].sort().join("_");
+  
+  // Delete all messages in the conversation
+  const messagesRef = collection(db, "conversations", conversationId, "messages");
+  const messagesSnap = await getDocs(messagesRef);
+  
+  const batch = writeBatch(db);
+  messagesSnap.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  
+  // Delete the conversation document itself
+  batch.delete(doc(db, "conversations", conversationId));
+  
+  await batch.commit();
+};
+
 // Admin
 export const getStats = async () => {
   const users = await getDocs(collection(db, "users"));

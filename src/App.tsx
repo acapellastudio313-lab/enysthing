@@ -9,8 +9,6 @@ import { Toaster, toast } from 'sonner';
 import { User } from './types';
 import Layout from './components/Layout';
 import Home from './pages/Home';
-import Candidates from './pages/Candidates';
-import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import Explore from './pages/Explore';
 import PostDetail from './pages/PostDetail';
@@ -18,6 +16,8 @@ import Login from './pages/Login';
 import Messages from './pages/Messages';
 import AdminDashboard from './pages/AdminDashboard';
 import Entertainment from './pages/Entertainment';
+import Apps from './pages/Apps';
+import ElectionApp from './pages/ElectionApp';
 import ScrollToTop from './components/ScrollToTop';
 import { Megaphone, X as CloseIcon } from 'lucide-react';
 import { getUser, listenToSettings, listenToNotifications, initAdmin, addVisitor } from './lib/db';
@@ -226,10 +226,10 @@ export default function App() {
       <Layout user={user} onLogout={() => setShowLogoutConfirm(true)}>
         <Routes>
           <Route path="/" element={<Home user={user} />} />
-          <Route path="/candidates" element={<Candidates user={user} />} />
           <Route path="/explore" element={<Explore />} />
-          <Route path="/leaderboard" element={<Leaderboard user={user} />} />
           <Route path="/entertainment" element={<Entertainment user={user} />} />
+          <Route path="/apps" element={<Apps />} />
+          <Route path="/apps/election" element={<ElectionApp user={user} />} />
           <Route path="/profile" element={<Profile user={user} onUpdateUser={setUser} />} />
           <Route path="/profile/:userId" element={<Profile user={user} onUpdateUser={setUser} />} />
           <Route path="/messages" element={<Messages user={user} />} />

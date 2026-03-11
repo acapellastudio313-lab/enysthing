@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Home, Users, Trophy, User as UserIcon, LogOut, Search, MessageSquare, Shield, Gamepad2 } from 'lucide-react';
+import { Home, User as UserIcon, LogOut, Search, MessageSquare, Shield, Gamepad2, LayoutGrid } from 'lucide-react';
 import { User } from '../types';
 import { clsx } from 'clsx';
 import NotificationBanner from './NotificationBanner';
@@ -23,19 +23,17 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
 
   const navItems = [
     { icon: Home, label: 'Beranda', to: '/' },
-    { icon: Search, label: 'Eksplor', to: '/explore' },
-    { icon: Users, label: 'Kandidat', to: '/candidates' },
-    { icon: Trophy, label: 'Klasemen', to: '/leaderboard' },
     { icon: Gamepad2, label: 'Hiburan', to: '/entertainment' },
+    { icon: LayoutGrid, label: 'Aplikasi', to: '/apps' },
     { icon: UserIcon, label: 'Profil', to: '/profile' },
   ];
 
   const filteredNavItems = navItems.filter(item => {
     if (user.role === 'admin') return true;
     if (user.role === 'pengunjung') return ['Beranda', 'Profil'].includes(item.label);
-    if (user.role === 'voter') return ['Beranda', 'Eksplor', 'Kandidat', 'Hiburan', 'Profil'].includes(item.label);
-    if (user.role === 'moderator') return ['Beranda', 'Eksplor', 'Kandidat', 'Klasemen', 'Hiburan', 'Profil'].includes(item.label);
-    if (user.role === 'candidate') return ['Beranda', 'Eksplor', 'Kandidat', 'Profil'].includes(item.label);
+    if (user.role === 'voter') return ['Beranda', 'Hiburan', 'Aplikasi', 'Profil'].includes(item.label);
+    if (user.role === 'moderator') return ['Beranda', 'Hiburan', 'Aplikasi', 'Profil'].includes(item.label);
+    if (user.role === 'candidate') return ['Beranda', 'Aplikasi', 'Profil'].includes(item.label);
     return false;
   });
 
@@ -117,8 +115,8 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
       case '/': return 'Beranda';
       case '/explore': return 'Eksplor';
       case '/messages': return 'Pesan';
-      case '/candidates': return 'Kandidat';
-      case '/leaderboard': return 'Klasemen';
+      case '/apps': return 'Aplikasi';
+      case '/apps/election': return 'Pemilihan';
       case '/profile': return 'Profil';
       case '/admin': return 'Admin Panel';
       default: return 'Beranda';
@@ -149,7 +147,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
           <nav className="flex-1 space-y-2">
             {filteredNavItems.map((item) => {
               let showBadge = false;
-              if (item.to === '/candidates') {
+              if (item.to === '/apps') {
                 showBadge = electionStatus === 'in_progress';
               } else if (item.to === '/entertainment') {
                 showBadge = isQuizActive || isSpinActive || isNumberActive;
@@ -238,6 +236,17 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
                 </span>
               )}
             </NavLink>
+            <NavLink 
+              to="/explore" 
+              className={({ isActive }) => 
+                clsx(
+                  "p-2 rounded-full transition-colors relative",
+                  isActive ? "bg-emerald-50 text-emerald-600" : "text-slate-600 hover:bg-slate-100"
+                )
+              }
+            >
+              <Search className="w-5 h-5" />
+            </NavLink>
             <NotificationBell user={user} />
             <button onClick={onLogout} className="p-2 text-slate-600 hover:bg-slate-100 rounded-full md:hidden">
               <LogOut className="w-5 h-5" />
@@ -256,7 +265,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-2 z-50 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
           {filteredNavItems.map((item) => {
             let showBadge = false;
-            if (item.to === '/candidates') {
+            if (item.to === '/apps') {
               showBadge = electionStatus === 'in_progress';
             } else if (item.to === '/entertainment') {
               showBadge = isQuizActive || isSpinActive || isNumberActive;

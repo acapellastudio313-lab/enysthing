@@ -4,7 +4,7 @@ import { Image as ImageIcon, X, Mic, Square, Play, Trash2, Clock, Video, FileTex
 import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
 import { formatDateWIB, compressImage } from '../utils';
-import { createPost, listenToPosts, listenToSettings, likePost, pinPost, uploadFile } from '../lib/db';
+import { createPost, listenToPosts, likePost, pinPost, uploadFile } from '../lib/db';
 
 export default function Home({ user }: { user: User }) {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -21,6 +21,7 @@ export default function Home({ user }: { user: User }) {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
+  const [postUploadProgress, setPostUploadProgress] = useState(0);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,10 +32,6 @@ export default function Home({ user }: { user: User }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-
-  const [electionEndDate, setElectionEndDate] = useState<Date | null>(null);
-  const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, seconds: number } | null>(null);
-  const [electionStatus, setElectionStatus] = useState<string>('not_started');
 
   useEffect(() => {
     const unsubscribePosts = listenToPosts((fetchedPosts) => {
@@ -48,49 +45,10 @@ export default function Home({ user }: { user: User }) {
       setLoading(false);
     });
 
-    const unsubscribeSettings = listenToSettings((settings) => {
-      if (settings.election_status) {
-        setElectionStatus(settings.election_status);
-      }
-      if (settings.election_end_date) {
-        setElectionEndDate(new Date(settings.election_end_date));
-      }
-    });
-
     return () => {
       unsubscribePosts();
-      unsubscribeSettings();
     };
   }, []);
-
-  useEffect(() => {
-    if (!electionEndDate || electionStatus !== 'in_progress') {
-      setTimeLeft(null);
-      return;
-    }
-
-    const calculateTimeLeft = () => {
-      const now = new Date();
-      const difference = electionEndDate.getTime() - now.getTime();
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((difference / 1000 / 60) % 60),
-          seconds: Math.floor((difference / 1000) % 60)
-        });
-      } else {
-        setTimeLeft(null);
-        setElectionStatus('closed');
-      }
-    };
-
-    calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 1000);
-
-    return () => clearInterval(interval);
-  }, [electionEndDate, electionStatus]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -192,21 +150,22 @@ export default function Home({ user }: { user: User }) {
     if (!newPost.trim() && !imageUrl && !audioUrl && !videoUrl && !documentUrl) return;
 
     setIsPosting(true);
+    setPostUploadProgress(0);
     try {
       let finalAudioUrl = null;
       if (audioBlob) {
         const file = new File([audioBlob], `audio_${Date.now()}.webm`, { type: audioBlob.type || 'audio/webm' });
-        finalAudioUrl = await uploadFile(file);
+        finalAudioUrl = await uploadFile(file, setPostUploadProgress);
       }
 
       let finalVideoUrl = videoUrl;
       if (videoFile) {
-        finalVideoUrl = await uploadFile(videoFile);
+        finalVideoUrl = await uploadFile(videoFile, setPostUploadProgress);
       }
 
       let finalDocumentUrl = documentUrl;
       if (documentFile) {
-        finalDocumentUrl = await uploadFile(documentFile);
+        finalDocumentUrl = await uploadFile(documentFile, setPostUploadProgress);
       }
 
       // For images, if it's a data URL from compressImage, we should also upload it to be safe
@@ -215,7 +174,7 @@ export default function Home({ user }: { user: User }) {
         const response = await fetch(imageUrl);
         const blob = await response.blob();
         const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
-        finalImageUrl = await uploadFile(file);
+        finalImageUrl = await uploadFile(file, setPostUploadProgress);
       } else if (showImageInput && !imageUrl) {
         finalImageUrl = `https://picsum.photos/seed/${Math.random()}/800/600`;
       }
@@ -254,6 +213,7 @@ export default function Home({ user }: { user: User }) {
       setDocumentName(null);
       setAudioBlob(null);
       setAudioUrl(null);
+      setPostUploadProgress(0);
     } catch (error) {
       console.error('Error creating post:', error);
       alert('Gagal membuat postingan: ' + (error instanceof Error ? error.message : 'Kesalahan tidak diketahui'));
@@ -321,56 +281,6 @@ export default function Home({ user }: { user: User }) {
 
   return (
     <div className="w-full">
-      {/* Election Status Banner */}
-      <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            <h2 className="font-bold text-lg">Status Pemilihan</h2>
-          </div>
-          {electionEndDate && (
-            <span className="text-xs bg-white/20 px-3 py-1.5 rounded-full font-medium">
-              Batas Waktu: {formatDateWIB(electionEndDate)}
-            </span>
-          )}
-        </div>
-
-        {electionStatus === 'not_started' && (
-          <div className="text-center py-4 bg-white/10 rounded-xl border border-white/20">
-            <p className="font-bold text-lg">Pemilihan Belum Dimulai</p>
-            <p className="text-sm opacity-80 mt-1">Tunggu admin untuk memulai sesi pemilihan.</p>
-          </div>
-        )}
-
-        {electionStatus === 'closed' && (
-          <div className="text-center py-4 bg-white/10 rounded-xl border border-white/20">
-            <p className="font-bold text-lg">Pemilihan Telah Berakhir</p>
-            <p className="text-sm opacity-80 mt-1">Terima kasih atas partisipasi Anda.</p>
-          </div>
-        )}
-
-        {electionStatus === 'in_progress' && timeLeft && (
-          <div className="grid grid-cols-4 gap-3 text-center">
-            <div className="bg-white/20 rounded-xl p-3 border border-white/10 shadow-sm">
-              <div className="text-3xl font-bold">{timeLeft.days}</div>
-              <div className="text-xs font-medium uppercase tracking-wider opacity-90 mt-1">Hari</div>
-            </div>
-            <div className="bg-white/20 rounded-xl p-3 border border-white/10 shadow-sm">
-              <div className="text-3xl font-bold">{timeLeft.hours}</div>
-              <div className="text-xs font-medium uppercase tracking-wider opacity-90 mt-1">Jam</div>
-            </div>
-            <div className="bg-white/20 rounded-xl p-3 border border-white/10 shadow-sm">
-              <div className="text-3xl font-bold">{timeLeft.minutes}</div>
-              <div className="text-xs font-medium uppercase tracking-wider opacity-90 mt-1">Menit</div>
-            </div>
-            <div className="bg-white/20 rounded-xl p-3 border border-white/10 shadow-sm">
-              <div className="text-3xl font-bold">{timeLeft.seconds}</div>
-              <div className="text-xs font-medium uppercase tracking-wider opacity-90 mt-1">Detik</div>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Stories Section (Mobile Only) */}
       <div className="lg:hidden bg-white border-b border-slate-200 py-2">
         <Stories user={user} />
@@ -552,7 +462,7 @@ export default function Home({ user }: { user: User }) {
                 className="bg-emerald-600 text-white px-4 md:px-6 py-1.5 md:py-2 rounded-full font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
                 {isPosting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isPosting ? 'Memposting...' : 'Posting'}
+                {isPosting ? (postUploadProgress > 0 ? `Mengunggah... ${Math.round(postUploadProgress)}%` : 'Memposting...') : 'Posting'}
               </button>
             </div>
           </form>
