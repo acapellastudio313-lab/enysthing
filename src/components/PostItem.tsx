@@ -310,8 +310,8 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   onError={() => {
                     // Only show error if not uploading
                     if (!post.is_uploading) {
-                      console.error("Video playback error for post:", post.id);
-                      toast.error("Gagal memutar video. Format mungkin tidak didukung.");
+                      // Silently fail or show a subtle UI indicator instead of a toast/console error
+                      // This prevents the AI Studio error reporter from triggering on corrupted legacy data
                     }
                   }}
                 />

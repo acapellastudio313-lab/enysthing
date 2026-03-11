@@ -32,15 +32,16 @@ function StoryViewer({
   const [isPaused, setIsPaused] = useState(false);
   
   const currentGroup = storyGroups[groupIndex];
-  // Guard against deleted stories/groups
-  if (!currentGroup) {
-    onClose();
-    return null;
-  }
-  
-  const currentStory = currentGroup.stories[storyIndex];
-  if (!currentStory) {
-    onClose();
+  const currentStory = currentGroup?.stories[storyIndex];
+
+  useEffect(() => {
+    // Guard against deleted stories/groups
+    if (!currentGroup || !currentStory) {
+      onClose();
+    }
+  }, [currentGroup, currentStory, onClose]);
+
+  if (!currentGroup || !currentStory) {
     return null;
   }
 
