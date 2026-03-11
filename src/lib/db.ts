@@ -618,21 +618,34 @@ export const search = async (queryText: string) => {
 // Candidates
 export const getCandidates = async (): Promise<Candidate[]> => {
   const querySnapshot = await getDocs(collection(db, "candidates"));
-  const candidates = await Promise.all(querySnapshot.docs.map(async (doc) => {
+  const candidatesRaw = await Promise.all(querySnapshot.docs.map(async (doc) => {
     const data = doc.data();
     const user = await getUser(data.user_id);
+    
+    // If user doesn't exist anymore, delete this candidate and its votes
+    if (!user) {
+      const batch = writeBatch(db);
+      batch.delete(doc.ref);
+      const votesQuery = query(collection(db, "votes"), where("candidate_id", "==", doc.id));
+      const votesSnapshot = await getDocs(votesQuery);
+      votesSnapshot.docs.forEach(voteDoc => batch.delete(voteDoc.ref));
+      await batch.commit();
+      return null;
+    }
+    
     const votesQuery = query(collection(db, "votes"), where("candidate_id", "==", doc.id));
     const votesSnapshot = await getDocs(votesQuery);
     return {
       id: doc.id,
       ...data,
-      name: user?.name || "Unknown",
-      avatar: user?.avatar || "",
-      username: user?.username || "",
+      name: user.name,
+      avatar: user.avatar || "",
+      username: user.username || "",
       vote_count: votesSnapshot.size,
     } as Candidate;
   }));
-  return candidates;
+  
+  return candidatesRaw.filter(c => c !== null) as Candidate[];
 };
 
 export const getMyVote = async (userId: string): Promise<{ candidate_id: string } | null> => {
@@ -859,7 +872,30 @@ export const getStats = async () => {
 };
 
 export const deleteUser = async (userId: string) => {
-  await deleteDoc(doc(db, "users", userId));
+  const batch = writeBatch(db);
+  
+  // Delete user document
+  batch.delete(doc(db, "users", userId));
+  
+  // Find and delete candidate if exists
+  const candidateQuery = query(collection(db, "candidates"), where("user_id", "==", userId));
+  const candidateSnapshot = await getDocs(candidateQuery);
+  
+  for (const candidateDoc of candidateSnapshot.docs) {
+    batch.delete(candidateDoc.ref);
+    
+    // Delete all votes for this candidate
+    const votesForCandidateQuery = query(collection(db, "votes"), where("candidate_id", "==", candidateDoc.id));
+    const votesForCandidateSnapshot = await getDocs(votesForCandidateQuery);
+    votesForCandidateSnapshot.docs.forEach(voteDoc => batch.delete(voteDoc.ref));
+  }
+  
+  // Delete user's own votes
+  const userVotesQuery = query(collection(db, "votes"), where("user_id", "==", userId));
+  const userVotesSnapshot = await getDocs(userVotesQuery);
+  userVotesSnapshot.docs.forEach(voteDoc => batch.delete(voteDoc.ref));
+  
+  await batch.commit();
 };
 
 export const createUser = async (userData: any) => {
@@ -922,25 +958,43 @@ export const sendSystemNotification = async (message: string) => {
 };
 
 export const bulkDeleteUsers = async (userIds: string[]) => {
-  const batch = writeBatch(db);
-  userIds.forEach(id => {
+  for (const id of userIds) {
+    const batch = writeBatch(db);
     batch.delete(doc(db, "users", id));
-  });
-  await batch.commit();
+    
+    // Find and delete candidate if exists
+    const candidateQuery = query(collection(db, "candidates"), where("user_id", "==", id));
+    const candidateSnapshot = await getDocs(candidateQuery);
+    
+    for (const candidateDoc of candidateSnapshot.docs) {
+      batch.delete(candidateDoc.ref);
+      
+      // Delete all votes for this candidate
+      const votesForCandidateQuery = query(collection(db, "votes"), where("candidate_id", "==", candidateDoc.id));
+      const votesForCandidateSnapshot = await getDocs(votesForCandidateQuery);
+      votesForCandidateSnapshot.docs.forEach(voteDoc => batch.delete(voteDoc.ref));
+    }
+    
+    // Delete user's own votes
+    const userVotesQuery = query(collection(db, "votes"), where("user_id", "==", id));
+    const userVotesSnapshot = await getDocs(userVotesQuery);
+    userVotesSnapshot.docs.forEach(voteDoc => batch.delete(voteDoc.ref));
+    
+    await batch.commit();
+  }
 };
 
 export const bulkApproveUsers = async (userIds: string[]) => {
-  const batch = writeBatch(db);
-  userIds.forEach(id => {
+  for (const id of userIds) {
+    const batch = writeBatch(db);
     batch.update(doc(db, "users", id), { is_approved: 1 });
-  });
-  await batch.commit();
+    await batch.commit();
+  }
 };
 
 export const bulkDeleteCandidates = async (candidateIds: string[], candidatesData: any[]) => {
-  const batch = writeBatch(db);
-  
   for (const id of candidateIds) {
+    const batch = writeBatch(db);
     batch.delete(doc(db, "candidates", id));
     
     // Find candidate data to get user_id
@@ -953,7 +1007,7 @@ export const bulkDeleteCandidates = async (candidateIds: string[], candidatesDat
     const votesQuery = query(collection(db, "votes"), where("candidate_id", "==", id));
     const votesSnapshot = await getDocs(votesQuery);
     votesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    
+    await batch.commit();
   }
-  
-  await batch.commit();
 };

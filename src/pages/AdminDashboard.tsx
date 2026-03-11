@@ -1338,6 +1338,11 @@ export default function AdminDashboard({ user }: { user: User }) {
                         await bulkDeleteUsers(selectedUserIds);
                         toast.success('Pengguna berhasil dihapus');
                         fetchUsers();
+                        fetchCandidates();
+                        const l = await getLeaderboard();
+                        setLeaderboard(l);
+                        const s = await getStats();
+                        setStats(s);
                         setSelectedUserIds([]);
                       }}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
