@@ -2,6 +2,7 @@ import { User } from '../types';
 import { useState, FormEvent, useEffect } from 'react';
 import { Loader2, LogIn, UserPlus } from 'lucide-react';
 import { getUserByUsername, getSettings, createUser, notifyAdmins } from '../lib/db';
+import { getIp } from '../lib/utils';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -115,14 +116,7 @@ export default function Login({ onLogin }: LoginProps) {
       }
 
       // Capture IP
-      let ip = 'Unknown';
-      try {
-        const ipResponse = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipResponse.json();
-        ip = ipData.ip;
-      } catch (e) {
-        console.error('Failed to get IP');
-      }
+      const ip = await getIp();
 
       const newUser = await createUser({
         name,

@@ -13,9 +13,10 @@ interface GalleryImageItemProps {
   isOwnProfile: boolean;
   onEdit: (img: GalleryImage) => void;
   onDelete: (id: string) => Promise<void>;
+  onClick: () => void;
 }
 
-function GalleryImageItem({ image, isOwnProfile, onEdit, onDelete }: GalleryImageItemProps) {
+function GalleryImageItem({ image, isOwnProfile, onEdit, onDelete, onClick }: GalleryImageItemProps) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     getFileFromChunks(image.image_file_id).then(setUrl);
@@ -24,12 +25,12 @@ function GalleryImageItem({ image, isOwnProfile, onEdit, onDelete }: GalleryImag
   if (!url) return <div className="aspect-square bg-slate-200 animate-pulse rounded-2xl" />;
   
   return (
-    <div className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+    <div className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer" onClick={onClick}>
       <img src={url} alt={image.caption} className="w-full h-full object-cover" />
       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
         <p className="text-white text-sm font-medium truncate">{image.caption}</p>
         {isOwnProfile && (
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => onEdit(image)} className="p-2 bg-white/20 rounded-lg text-white hover:bg-white/40">
               <Edit3 className="w-4 h-4" />
             </button>
@@ -62,6 +63,7 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
   const [galleryUploadProgress, setGalleryUploadProgress] = useState(0);
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<GalleryImage | null>(null);
+  const [selectedGalleryImageUrl, setSelectedGalleryImageUrl] = useState<string | null>(null);
   const [isEditingGalleryCaption, setIsEditingGalleryCaption] = useState(false);
   const [galleryCaptionInput, setGalleryCaptionInput] = useState('');
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
@@ -557,9 +559,24 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
                     isOwnProfile={isOwnProfile} 
                     onEdit={(img) => { setSelectedGalleryImage(img); setGalleryCaptionInput(img.caption); setIsEditingGalleryCaption(true); }}
                     onDelete={handleDeleteImage}
+                    onClick={async () => {
+                      const url = await getFileFromChunks(image.image_file_id);
+                      setSelectedGalleryImageUrl(url);
+                      setSelectedGalleryImage(image);
+                    }}
                   />
                 ))}
               </div>
+              {selectedGalleryImage && !isEditingGalleryCaption && (
+                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedGalleryImage(null); setSelectedGalleryImageUrl(null); }}>
+                  <button onClick={() => { setSelectedGalleryImage(null); setSelectedGalleryImageUrl(null); }} className="absolute top-4 right-4 p-2 bg-white/20 rounded-full text-white hover:bg-white/40">
+                    <X className="w-8 h-8" />
+                  </button>
+                  {selectedGalleryImageUrl && (
+                    <img src={selectedGalleryImageUrl} alt="Zoom" className="max-w-full max-h-full object-contain" />
+                  )}
+                </div>
+              )}
               {isEditingGalleryCaption && selectedGalleryImage && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                   <div className="bg-white rounded-2xl p-6 w-full max-w-sm">

@@ -294,7 +294,7 @@ export default function Home({ user }: { user: User }) {
             <textarea
               value={newPost}
               onChange={(e) => setNewPost(e.target.value)}
-              placeholder="Apa yang ingin Anda sampaikan tentang pemilihan ini?"
+              placeholder="Apa yang anda ingin sampaikan hari ini?"
               className="w-full bg-transparent resize-none outline-none text-base md:text-lg placeholder:text-slate-400 min-h-[60px] md:min-h-[80px]"
             />
             

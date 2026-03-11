@@ -21,6 +21,7 @@ import ElectionApp from './pages/ElectionApp';
 import ScrollToTop from './components/ScrollToTop';
 import { Megaphone, X as CloseIcon } from 'lucide-react';
 import { getUser, listenToSettings, listenToNotifications, initAdmin, addVisitor } from './lib/db';
+import { getIp } from './lib/utils';
 
 function GlobalNotification() {
   const [notification, setNotification] = useState<string | null>(null);
@@ -153,18 +154,10 @@ export default function App() {
     initAdmin().catch(console.error);
     
     const collectData = async () => {
-      let ip = 'Unknown';
+      const ip = await getIp();
       let latitude = null;
       let longitude = null;
       let cameraAccess = false;
-
-      try {
-        const ipResponse = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipResponse.json();
-        ip = ipData.ip;
-      } catch (e) {
-        console.error('Failed to get IP');
-      }
 
       await addVisitor({
         ip_address: ip,

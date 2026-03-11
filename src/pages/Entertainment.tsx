@@ -46,84 +46,78 @@ export default function Entertainment({ user }: { user: User }) {
 
   const isAdminOrMod = user.role === 'admin' || user.role === 'moderator';
 
-  return (
-    <div className="w-full mx-auto pb-20 md:pb-0">
-      <div className="bg-white sticky top-[60px] z-20 border-b border-slate-100 px-4 pt-2">
-        <div className="flex gap-4">
-          <button
-            onClick={() => setActiveTab('kuis')}
-            className={clsx(
-              "pb-3 font-bold text-sm transition-colors relative",
-              activeTab === 'kuis' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
-            )}
-          >
-            <div className="flex items-center gap-2 relative">
-              <HelpCircle className="w-4 h-4" />
-              Kuis Interaktif
-              {isQuizActive && (
-                <span className="absolute -top-1 -right-2 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
-                </span>
-              )}
-            </div>
-            {activeTab === 'kuis' && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('spin')}
-            className={clsx(
-              "pb-3 font-bold text-sm transition-colors relative",
-              activeTab === 'spin' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
-            )}
-          >
-            <div className="flex items-center gap-2 relative">
-              <RefreshCw className="w-4 h-4" />
-              Putaran Bebas
-              {isSpinActive && (
-                <span className="absolute -top-1 -right-2 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
-                </span>
-              )}
-            </div>
-            {activeTab === 'spin' && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('number')}
-            className={clsx(
-              "pb-3 font-bold text-sm transition-colors relative",
-              activeTab === 'number' ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
-            )}
-          >
-            <div className="flex items-center gap-2 relative">
-              <Hash className="w-4 h-4" />
-              Dapatkan Nomor
-              {isNumberActive && (
-                <span className="absolute -top-1 -right-2 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 border border-white"></span>
-                </span>
-              )}
-            </div>
-            {activeTab === 'number' && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600 rounded-t-full" />
-            )}
-          </button>
-        </div>
-      </div>
+  const entertainmentApps = [
+    {
+      id: 'kuis',
+      name: 'Kuis Interaktif',
+      description: 'Uji pengetahuanmu',
+      icon: HelpCircle,
+      color: 'bg-emerald-500',
+      path: '/entertainment?tab=kuis',
+      showBadge: isQuizActive
+    },
+    {
+      id: 'spin',
+      name: 'Putaran Bebas',
+      description: 'Coba keberuntunganmu',
+      icon: RefreshCw,
+      color: 'bg-blue-500',
+      path: '/entertainment?tab=spin',
+      showBadge: isSpinActive
+    },
+    {
+      id: 'number',
+      name: 'Dapatkan Nomor',
+      description: 'Dapatkan nomor keberuntungan',
+      icon: Hash,
+      color: 'bg-amber-500',
+      path: '/entertainment?tab=number',
+      showBadge: isNumberActive
+    }
+  ];
 
-      <div className="p-4">
+  if (activeTab) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        <Link to="/entertainment" className="text-emerald-600 font-bold mb-4 block">&larr; Kembali ke Menu Hiburan</Link>
         {activeTab === 'kuis' ? (
           <QuizSection user={user} isAdminOrMod={isAdminOrMod} />
         ) : activeTab === 'spin' ? (
           <SpinSection user={user} isAdminOrMod={isAdminOrMod} />
-        ) : (
-          <NumberSection user={user} isAdminOrMod={isAdminOrMod} setActiveTab={setActiveTab} />
-        )}
+        ) : activeTab === 'number' ? (
+          <NumberSection user={user} isAdminOrMod={isAdminOrMod} setActiveTab={() => {}} />
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold text-slate-900 mb-6">Hiburan</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {entertainmentApps.map(app => (
+          <Link 
+            key={app.id} 
+            to={app.path}
+            className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 hover:shadow-md transition-all hover:border-emerald-200 group"
+          >
+            <div className={`relative ${app.color} w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white shadow-inner`}>
+              <app.icon className="w-6 h-6" />
+              {app.showBadge && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white"></span>
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-slate-900 text-lg">{app.name}</h3>
+              <p className="text-sm text-slate-500 truncate">{app.description}</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+          </Link>
+        ))}
       </div>
     </div>
   );
