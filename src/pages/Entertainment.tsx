@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { User } from '../types';
-import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, deleteDoc, serverTimestamp, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { getAllUsers, listenToSettings } from '../lib/db';
@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 
 export default function Entertainment({ user }: { user: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as 'kuis' | 'spin' | 'number') || 'kuis';
+  const activeTab = searchParams.get('tab') as 'kuis' | 'spin' | 'number' | null;
   
   const [isQuizActive, setIsQuizActive] = useState(false);
   const [isSpinActive, setIsSpinActive] = useState(false);
