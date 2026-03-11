@@ -31,17 +31,53 @@ function StoryViewer({
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   
+  // Keep track of the last valid story so we don't render a blank screen while closing
+  const [lastValidStory, setLastValidStory] = useState<Story | null>(null);
+  const [lastValidGroup, setLastValidGroup] = useState<StoryGroup | null>(null);
+
   const currentGroup = storyGroups[groupIndex];
   const currentStory = currentGroup?.stories[storyIndex];
 
   useEffect(() => {
-    // Guard against deleted stories/groups
-    if (!currentGroup || !currentStory) {
-      onClose();
+    if (currentGroup && currentStory) {
+      setLastValidGroup(currentGroup);
+      setLastValidStory(currentStory);
     }
-  }, [currentGroup, currentStory, onClose]);
+  }, [currentGroup, currentStory]);
 
-  if (!currentGroup || !currentStory) {
+  useEffect(() => {
+    // If the current group no longer exists
+    if (!storyGroups[groupIndex]) {
+      if (groupIndex < storyGroups.length) {
+        // A group was deleted, but another shifted into its place
+        setStoryIndex(0);
+      } else {
+        // We were at the last group, and it was deleted or we are out of bounds
+        onClose();
+      }
+      return;
+    }
+
+    // If the current story no longer exists in this group
+    if (!storyGroups[groupIndex].stories[storyIndex]) {
+      if (storyIndex < storyGroups[groupIndex].stories.length) {
+        // A story was deleted, but another shifted into its place. Do nothing.
+      } else if (storyGroups[groupIndex].stories.length > 0) {
+        // We deleted the last story in the group. Move to next group if it exists.
+        if (groupIndex < storyGroups.length - 1) {
+          setGroupIndex(groupIndex + 1);
+          setStoryIndex(0);
+        } else {
+          onClose();
+        }
+      }
+    }
+  }, [storyGroups, groupIndex, storyIndex, onClose]);
+
+  const displayGroup = currentGroup || lastValidGroup;
+  const displayStory = currentStory || lastValidStory;
+
+  if (!displayGroup || !displayStory) {
     return null;
   }
 
@@ -49,15 +85,15 @@ function StoryViewer({
 
   const [showViewers, setShowViewers] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [mediaUrl, setMediaUrl] = useState<string | null>(currentStory.media_url || null);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(displayStory.media_url || null);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
 
   useEffect(() => {
     const loadMedia = async () => {
-      if (currentStory.media_file_id && !mediaUrl) {
+      if (displayStory.media_file_id && !mediaUrl) {
         setIsLoadingMedia(true);
         try {
-          const url = await getFileFromChunks(currentStory.media_file_id);
+          const url = await getFileFromChunks(displayStory.media_file_id);
           if (url) {
             setMediaUrl(url);
           }
@@ -67,11 +103,11 @@ function StoryViewer({
           setIsLoadingMedia(false);
         }
       } else {
-        setMediaUrl(currentStory.media_url || null);
+        setMediaUrl(displayStory.media_url || null);
       }
     };
     loadMedia();
-  }, [currentStory.id, currentStory.media_file_id, currentStory.media_url]);
+  }, [displayStory.id, displayStory.media_file_id, displayStory.media_url]);
 
   const handleDeleteStory = async () => {
     if (!currentUser || !currentUser.id) {
@@ -81,15 +117,11 @@ function StoryViewer({
     
     setIsDeleting(true);
     try {
-      await deleteStory(currentStory.id);
+      await deleteStory(displayStory.id);
       toast.success('Cerita berhasil dihapus');
-      
-      // If this was the last story in the last group, close the viewer
-      if (storyGroups.length === 1 && currentGroup.stories.length === 1) {
-        onClose();
-      } else {
-        handleNext();
-      }
+      // We don't need to manually navigate here.
+      // The onSnapshot listener will update storyGroups, 
+      // and our useEffect will automatically handle the navigation or closing.
     } catch (e) {
       console.error('Error deleting story:', e);
       toast.error('Terjadi kesalahan saat menghapus cerita');
@@ -99,7 +131,7 @@ function StoryViewer({
   };
 
   const handleNext = () => {
-    if (storyIndex < currentGroup.stories.length - 1) {
+    if (storyIndex < displayGroup.stories.length - 1) {
       setStoryIndex(prev => prev + 1);
       setProgress(0);
     } else if (groupIndex < storyGroups.length - 1) {
@@ -133,12 +165,12 @@ function StoryViewer({
       lastTime = now;
 
       if (!isPaused) {
-        if (currentStory.media_type === 'video' && videoRef.current) {
+        if (displayStory.media_type === 'video' && videoRef.current) {
           const { currentTime, duration } = videoRef.current;
           if (duration) {
             setProgress((currentTime / duration) * 100);
           }
-        } else if (currentStory.media_type === 'image') {
+        } else if (displayStory.media_type === 'image') {
           accumulatedTime += deltaTime;
           const p = Math.min((accumulatedTime / IMAGE_DURATION) * 100, 100);
           setProgress(p);
@@ -154,7 +186,7 @@ function StoryViewer({
 
     animationFrame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrame);
-  }, [currentStory, isPaused]);
+  }, [displayStory, isPaused]);
 
   const handleVideoTimeUpdate = () => {
     // We now use requestAnimationFrame for smoother updates
@@ -168,12 +200,12 @@ function StoryViewer({
         videoRef.current.play().catch(() => {});
       }
     }
-  }, [isPaused, currentStory]);
+  }, [isPaused, displayStory]);
 
   useEffect(() => {
     // Record view
-    viewStory(currentStory.id, currentUser.id).catch(console.error);
-  }, [currentStory.id, currentUser.id]);
+    viewStory(displayStory.id, currentUser.id).catch(console.error);
+  }, [displayStory.id, currentUser.id]);
 
   useEffect(() => {
     // Dispatch event to toggle bottom navigation
@@ -206,7 +238,7 @@ function StoryViewer({
       >
         {/* Progress Bars */}
         <div className="absolute top-0 left-0 right-0 p-2 z-20 flex gap-1">
-          {currentGroup.stories.map((_, idx) => (
+          {displayGroup.stories.map((_, idx) => (
             <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-white"
@@ -219,15 +251,15 @@ function StoryViewer({
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 pt-6 px-4 pb-12 bg-gradient-to-b from-black/60 to-transparent z-30 flex items-start justify-between pointer-events-none">
           <div className="flex items-center gap-3 pointer-events-auto">
-            <img src={currentGroup.user_avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={currentGroup.user_name} className="w-10 h-10 rounded-full border border-white/20" />
+            <img src={displayGroup.user_avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={displayGroup.user_name} className="w-10 h-10 rounded-full border border-white/20" />
             <div>
-              <p className="text-white font-bold text-sm">{currentGroup.user_name}</p>
-              <p className="text-white/70 text-xs">{formatDateWIB(currentStory.created_at)}</p>
+              <p className="text-white font-bold text-sm">{displayGroup.user_name}</p>
+              <p className="text-white/70 text-xs">{formatDateWIB(displayStory.created_at)}</p>
             </div>
           </div>
           
           <div className="flex items-center gap-2 pointer-events-auto">
-             {(currentStory.user_id === currentUser.id || currentUser.role === 'admin') && (
+             {(displayStory.user_id === currentUser.id || currentUser.role === 'admin') && (
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
                   disabled={isDeleting}
@@ -252,7 +284,7 @@ function StoryViewer({
         {/* Content */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentStory.id}
+            key={displayStory.id}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.05 }}
@@ -267,7 +299,7 @@ function StoryViewer({
             ) : (
               <TransformWrapper>
                 <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
-                  {currentStory.media_type === 'video' ? (
+                  {displayStory.media_type === 'video' ? (
                     <video 
                       ref={videoRef}
                       src={mediaUrl || undefined} 
@@ -292,7 +324,7 @@ function StoryViewer({
             )}
 
             {/* Text Overlays */}
-            {currentStory.text_overlays?.map((overlay, idx) => (
+            {displayStory.text_overlays?.map((overlay, idx) => (
               <div 
                 key={idx}
                 className={`absolute flex items-center justify-center pointer-events-none`}
@@ -310,9 +342,9 @@ function StoryViewer({
             ))}
 
             {/* Tags */}
-            {currentStory.tags && currentStory.tags.length > 0 && (
+            {displayStory.tags && displayStory.tags.length > 0 && (
               <>
-                {currentStory.tags.map((tag, idx) => (
+                {displayStory.tags.map((tag, idx) => (
                   <div 
                     key={`${tag.id}-${idx}`} 
                     className="absolute bg-black/50 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 backdrop-blur-sm z-20"
@@ -330,14 +362,14 @@ function StoryViewer({
         </AnimatePresence>
 
         {/* Viewers Button (Author Only) */}
-        {currentStory.user_id === currentUser.id && (
+        {displayStory.user_id === currentUser.id && (
           <div className="absolute bottom-4 left-0 right-0 flex justify-center z-30 pointer-events-none">
             <button 
               onClick={(e) => { e.stopPropagation(); setShowViewers(true); setIsPaused(true); }}
               className="flex items-center gap-2 bg-black/50 text-white px-4 py-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition-colors pointer-events-auto"
             >
               <Eye className="w-4 h-4" />
-              <span className="text-sm font-medium">{currentStory.views?.filter(v => v.id !== currentUser.id).length || 0} Tayangan</span>
+              <span className="text-sm font-medium">{displayStory.views?.filter(v => v.id !== currentUser.id).length || 0} Tayangan</span>
             </button>
           </div>
         )}
@@ -355,18 +387,18 @@ function StoryViewer({
               <div className="p-4 border-b border-slate-800 flex justify-between items-center">
                 <h3 className="text-white font-bold flex items-center gap-2">
                   <Eye className="w-5 h-5" />
-                  Tayangan ({currentStory.views?.filter(v => v.id !== currentUser.id).length || 0})
+                  Tayangan ({displayStory.views?.filter(v => v.id !== currentUser.id).length || 0})
                 </h3>
                 <button onClick={() => { setShowViewers(false); setIsPaused(false); }} className="text-slate-400 hover:text-white">
                   <X className="w-6 h-6" />
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 pb-8 md:pb-4">
-                {currentStory.views?.filter(v => v.id !== currentUser.id).length === 0 ? (
+                {displayStory.views?.filter(v => v.id !== currentUser.id).length === 0 ? (
                   <p className="text-slate-400 text-center mt-4">Belum ada yang melihat cerita ini.</p>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {currentStory.views?.filter(v => v.id !== currentUser.id).map(viewer => (
+                    {displayStory.views?.filter(v => v.id !== currentUser.id).map(viewer => (
                       <div key={viewer.id} className="flex items-center gap-3">
                         <img src={viewer.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={viewer.name} className="w-10 h-10 rounded-full" />
                         <div>
