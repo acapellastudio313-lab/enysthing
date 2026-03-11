@@ -14,6 +14,7 @@ export default function Leaderboard({ user }: { user: User }) {
   const [showNonVoters, setShowNonVoters] = useState(() => {
     return localStorage.getItem('leaderboard_showNonVoters') === 'true';
   });
+  const [unblurredId, setUnblurredId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('leaderboard_showNonVoters', String(showNonVoters));
@@ -139,14 +140,22 @@ export default function Leaderboard({ user }: { user: User }) {
                   damping: 25 
                 }}
                 key={`${entry.id}-${index}`}
+                tabIndex={0}
+                onMouseEnter={() => setUnblurredId(entry.id)}
+                onMouseLeave={() => setUnblurredId(null)}
+                onClick={() => setUnblurredId(entry.id)}
+                onFocus={() => setUnblurredId(entry.id)}
+                onBlur={() => setUnblurredId(null)}
                 className={clsx(
-                  "bg-white rounded-xl md:rounded-3xl p-3 md:p-6 shadow-sm border transition-all hover:shadow-md group",
+                  "bg-white rounded-xl md:rounded-3xl p-3 md:p-6 shadow-sm border transition-all hover:shadow-md cursor-pointer outline-none",
                   index === 0 ? "border-yellow-400 ring-1 ring-yellow-400/50" : "border-slate-200"
                 )}
               >
                 <div className={clsx(
                   "flex items-center gap-3 md:gap-6 w-full transition-all duration-500",
-                  (user.role === 'admin' || user.role === 'moderator') ? "md:blur-md md:group-hover:blur-0" : ""
+                  (user.role === 'admin' || user.role === 'moderator') 
+                    ? (unblurredId === entry.id ? "md:blur-0" : "md:blur-md") 
+                    : ""
                 )}>
                   <div className="flex flex-col items-center justify-center w-7 md:w-12 shrink-0">
                     {index === 0 ? (
