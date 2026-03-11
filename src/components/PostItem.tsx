@@ -48,6 +48,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
   const [likers, setLikers] = useState<User[]>([]);
   const [, setTick] = useState(0);
 
+  const [imageSrc, setImageSrc] = useState<string | null>(post.image_url || null);
   const [videoSrc, setVideoSrc] = useState<string | null>(post.video_url || null);
   const [documentSrc, setDocumentSrc] = useState<string | null>(post.document_url || null);
   const [audioSrc, setAudioSrc] = useState<string | null>(post.audio_url || null);
@@ -56,6 +57,10 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
   useEffect(() => {
     const loadMedia = async () => {
       // Check local cache first for instant results for the uploader
+      if (post.image_file_id && !imageSrc) {
+        const local = getLocalMedia(post.image_file_id);
+        if (local) setImageSrc(local);
+      }
       if (post.video_file_id && !videoSrc) {
         const local = getLocalMedia(post.video_file_id);
         if (local) setVideoSrc(local);
@@ -76,6 +81,12 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
           return;
         }
 
+        if (post.image_file_id && !imageSrc) {
+          setIsLoadingMedia(true);
+          const url = await getFileFromChunks(post.image_file_id);
+          if (url) setImageSrc(url);
+          setIsLoadingMedia(false);
+        }
         if (post.video_file_id && !videoSrc) {
           setIsLoadingMedia(true);
           const url = await getFileFromChunks(post.video_file_id);
@@ -260,12 +271,12 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
           </div>
           <p className="mt-1 text-sm md:text-base text-slate-800 whitespace-pre-wrap break-words">{post.content}</p>
           
-          {post.image_url && (
+          {imageSrc && (
             <div 
               className="mt-3 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer"
               onClick={() => setIsImageModalOpen(true)}
             >
-              <img src={post.image_url || null} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
+              <img src={imageSrc || null} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
             </div>
           )}
 
@@ -576,7 +587,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.9, opacity: 0 }}
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    src={post.image_url || null}
+                    src={imageSrc || null}
                     alt="Post attachment full size"
                     className="max-w-full max-h-full object-contain rounded-lg shadow-2xl pointer-events-auto"
                   />

@@ -74,6 +74,7 @@ export interface Post {
   author_id: string;
   content: string;
   image_url: string | null;
+  image_file_id?: string;
   video_url?: string | null;
   document_url?: string | null;
   audio_url?: string | null;

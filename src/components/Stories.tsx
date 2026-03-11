@@ -203,7 +203,7 @@ function StoryViewer({
           </div>
           
           <div className="flex items-center gap-2 pointer-events-auto">
-             {(Number(currentStory.user_id) === Number(currentUser.id) || currentUser.role === 'admin') && (
+             {(currentStory.user_id === currentUser.id || currentUser.role === 'admin') && (
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleDeleteStory(); }}
                   disabled={isDeleting}
@@ -412,11 +412,32 @@ export default function Stories({ user }: { user: User }) {
         groups[story.user_id].stories.push(story);
       });
       
-      setStoryGroups(Object.values(groups));
+      const sortedGroups = Object.values(groups).sort((a, b) => {
+        if (a.user_id === user.id) return -1;
+        if (b.user_id === user.id) return 1;
+        return 0;
+      });
+      setStoryGroups(sortedGroups);
     });
 
     return () => unsubscribe();
   }, []);
+
+  const handleDeleteAllStories = async (userId: string) => {
+    const confirmDelete = window.confirm('Hapus semua cerita Anda?');
+    if (!confirmDelete) return;
+
+    try {
+      const userStories = stories.filter(s => s.user_id === userId);
+      for (const story of userStories) {
+        await deleteStory(story.id);
+      }
+      toast.success('Semua cerita berhasil dihapus');
+    } catch (error) {
+      console.error('Error deleting stories:', error);
+      toast.error('Gagal menghapus cerita');
+    }
+  };
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -680,7 +701,7 @@ export default function Stories({ user }: { user: User }) {
           });
           
           return (
-            <div key={group.user_id} className="flex flex-col items-center gap-1 shrink-0 cursor-pointer" onClick={() => {
+            <div key={group.user_id} className="flex flex-col items-center gap-1 shrink-0 cursor-pointer relative group" onClick={() => {
               setActiveStoryGroupIndex(index);
             }}>
               <div className={clsx(
@@ -694,6 +715,19 @@ export default function Stories({ user }: { user: User }) {
                 />
               </div>
               <span className="text-xs font-medium text-slate-600 truncate w-16 text-center">{group.user_name.split(' ')[0]}</span>
+              
+              {(group.user_id === user.id || user.role === 'admin') && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteAllStories(group.user_id);
+                  }}
+                  className="absolute -top-1 -right-1 bg-red-500 text-white p-1 rounded-full shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Hapus semua cerita"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
             </div>
           );
         })}

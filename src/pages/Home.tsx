@@ -222,10 +222,14 @@ export default function Home({ user }: { user: User }) {
       await createPost({ 
         author_id: user.id, 
         content: newPost, 
-        image_url: finalImageUrl,
-        video_url: finalVideoUrl,
-        document_url: finalDocumentUrl,
-        audio_url: finalAudioUrl
+        image_url: imageUrl && !imageUrl.startsWith('data:image') ? imageUrl : null,
+        image_file_id: imageUrl && imageUrl.startsWith('data:image') ? finalImageUrl : null,
+        video_url: videoFile ? null : finalVideoUrl,
+        video_file_id: videoFile ? finalVideoUrl : null,
+        document_url: documentFile ? null : finalDocumentUrl,
+        document_file_id: documentFile ? finalDocumentUrl : null,
+        audio_url: audioBlob ? null : finalAudioUrl,
+        audio_file_id: audioBlob ? finalAudioUrl : null
       });
 
       setNewPost('');

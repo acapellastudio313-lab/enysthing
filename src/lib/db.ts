@@ -34,24 +34,32 @@ export async function getFileFromChunks(fileId: string): Promise<string | null> 
       .sort((a, b) => a.index - b.index);
       
     // Combine all chunk data strings
-    const combinedBase64 = sortedChunks.map(c => c.data).join('');
+    const combinedData = sortedChunks.map(c => c.data).join('');
     
-    // Extract actual base64 content (remove data:mime/type;base64, prefix)
-    const base64Parts = combinedBase64.split(',');
-    const actualData = base64Parts.length > 1 ? base64Parts[1] : base64Parts[0];
-
-    // Convert base64 to binary data
-    const binaryString = atob(actualData);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+    try {
+      // The most robust way to handle Data URLs, especially large ones, is using fetch
+      if (combinedData.startsWith('data:')) {
+        const response = await fetch(combinedData);
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+      }
+      
+      // Fallback for raw base64 strings
+      const actualData = combinedData.replace(/\s/g, '');
+      const binaryString = atob(actualData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const fileBlob = new Blob([bytes], { type: type || 'application/octet-stream' });
+      return URL.createObjectURL(fileBlob);
+    } catch (err) {
+      console.error(`Critical error in getFileFromChunks for file ${fileId}:`, err);
+      return null;
     }
-    
-    // Create a Blob and return its local URL
-    const fileBlob = new Blob([bytes], { type: type || 'application/octet-stream' });
-    return URL.createObjectURL(fileBlob);
   } catch (err) {
-    console.error("Critical error in getFileFromChunks:", err);
+    console.error("Error fetching file chunks:", err);
     return null;
   }
 }
@@ -210,24 +218,26 @@ export const uploadToStorage = async (file: File, path: string): Promise<string>
 
 export const uploadBase64ToStorage = async (base64String: string, path: string): Promise<string> => {
   try {
-    // Extract mime type and base64 data
-    const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-      throw new Error('Invalid base64 string');
+    // Use fetch to handle Data URL conversion to Blob robustly if possible
+    if (base64String.startsWith('data:')) {
+      const response = await fetch(base64String);
+      const blob = await response.blob();
+      const mimeType = blob.type;
+      const extension = mimeType.split('/')[1] || 'jpg';
+      const file = new File([blob], `image_${Date.now()}.${extension}`, { type: mimeType });
+      return await uploadToStorage(file, path);
     }
-    
-    const mimeType = matches[1];
-    const base64Data = matches[2];
-    
-    // Convert base64 to binary
-    const binaryString = atob(base64Data);
+
+    // Fallback for raw base64
+    const actualData = base64String.replace(/\s/g, '');
+    const binaryString = atob(actualData);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
     
-    const blob = new Blob([bytes], { type: mimeType });
-    const file = new File([blob], `image_${Date.now()}.${mimeType.split('/')[1] || 'jpg'}`, { type: mimeType });
+    const blob = new Blob([bytes], { type: 'image/jpeg' });
+    const file = new File([blob], `image_${Date.now()}.jpg`, { type: 'image/jpeg' });
     
     return await uploadToStorage(file, path);
   } catch (error) {
@@ -242,6 +252,7 @@ export const createPost = async (postData: any) => {
     author_id: postData.author_id,
     content: postData.content,
     image_url: postData.image_url || null,
+    image_file_id: postData.image_file_id || null,
     video_url: postData.video_url || null,
     video_file_id: postData.video_file_id || null,
     document_url: postData.document_url || null,
@@ -432,7 +443,20 @@ export const listenToStories = (callback: (stories: Story[]) => void) => {
 };
 
 export const deleteStory = async (storyId: string) => {
-  await deleteDoc(doc(db, "stories", storyId));
+  try {
+    const storyRef = doc(db, "stories", storyId);
+    const storySnap = await getDoc(storyRef);
+    if (storySnap.exists()) {
+      const data = storySnap.data();
+      if (data.media_file_id) {
+        await deleteFileChunks(data.media_file_id);
+      }
+    }
+    await deleteDoc(storyRef);
+  } catch (error) {
+    console.error("Error deleting story:", error);
+    throw error;
+  }
 };
 
 export const viewStory = async (storyId: string, userId: string) => {
