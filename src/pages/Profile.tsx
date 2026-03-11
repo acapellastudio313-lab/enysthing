@@ -1,10 +1,10 @@
-import { useState, useEffect, FormEvent, ChangeEvent, MouseEvent, TouchEvent } from 'react';
+import { useState, useEffect, FormEvent, ChangeEvent, MouseEvent, TouchEvent, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { User, Post, Candidate } from '../types';
-import { Settings, Edit3, MapPin, Briefcase, Info, X, Camera, MessageSquare, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import { User, Post, Candidate, GalleryImage } from '../types';
+import { Settings, Edit3, MapPin, Briefcase, Info, X, Camera, MessageSquare, CheckCircle, Image as ImageIcon, Trash2, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PostItem from '../components/PostItem';
-import { getUser, listenToPosts, getCandidates, updateUser, updateCandidate, likePost, pinPost } from '../lib/db';
+import { getUser, listenToPosts, getCandidates, updateUser, updateCandidate, likePost, pinPost, addGalleryImage, listenToGalleryImages, updateGalleryImageCaption, deleteGalleryImage, uploadFile } from '../lib/db';
 import { compressImage } from '../utils';
 
 export default function Profile({ user: currentUser, onUpdateUser }: { user: User, onUpdateUser?: (user: User) => void }) {
@@ -16,11 +16,19 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
   const [loading, setLoading] = useState(true);
   
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as 'posts' | 'campaign') || 'posts';
+  const activeTab = (searchParams.get('tab') as 'posts' | 'campaign' | 'gallery') || 'posts';
 
-  const setActiveTab = (tab: 'posts' | 'campaign') => {
+  const setActiveTab = (tab: 'posts' | 'campaign' | 'gallery') => {
     setSearchParams({ tab });
   };
+
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+  const [galleryUploadProgress, setGalleryUploadProgress] = useState(0);
+  const [selectedGalleryImage, setSelectedGalleryImage] = useState<GalleryImage | null>(null);
+  const [isEditingGalleryCaption, setIsEditingGalleryCaption] = useState(false);
+  const [galleryCaptionInput, setGalleryCaptionInput] = useState('');
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
 
   const [candidateData, setCandidateData] = useState<Candidate | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -107,7 +115,14 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
       });
     }
 
-    return () => unsubscribePosts();
+    const unsubscribeGallery = listenToGalleryImages(targetUserId, (images) => {
+      setGalleryImages(images);
+    });
+
+    return () => {
+      unsubscribePosts();
+      unsubscribeGallery();
+    };
   }, [profileUser, targetUserId, currentUser.id]);
 
   const handlePostUpdated = (updatedPost: Post) => {
@@ -227,6 +242,58 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
       x: Math.max(0, Math.min(100, prev.x - e.movementX * 0.5)),
       y: Math.max(0, Math.min(100, prev.y - e.movementY * 0.5))
     }));
+  };
+
+  const handleGalleryUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      toast.error('Hanya gambar yang diperbolehkan');
+      return;
+    }
+
+    setIsUploadingGallery(true);
+    setGalleryUploadProgress(0);
+
+    try {
+      const compressed = await compressImage(file);
+      const url = await uploadFile(file, (progress) => setGalleryUploadProgress(progress));
+      await addGalleryImage(currentUser.id, url, '');
+      toast.success('Gambar berhasil diunggah');
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal mengunggah gambar');
+    } finally {
+      setIsUploadingGallery(false);
+      setGalleryUploadProgress(0);
+      if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
+    }
+  };
+
+  const handleUpdateCaption = async () => {
+    if (!selectedGalleryImage) return;
+    try {
+      await updateGalleryImageCaption(selectedGalleryImage.id, galleryCaptionInput);
+      toast.success('Caption diperbarui');
+      setIsEditingGalleryCaption(false);
+      setSelectedGalleryImage(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal memperbarui caption');
+    }
+  };
+
+  const handleDeleteImage = async (imageId: string) => {
+    if (!confirm('Hapus gambar ini?')) return;
+    try {
+      await deleteGalleryImage(imageId);
+      toast.success('Gambar dihapus');
+      if (selectedGalleryImage?.id === imageId) {
+        setSelectedGalleryImage(null);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghapus gambar');
+    }
   };
 
   const handleAvatarTouchStart = (e: TouchEvent) => {
@@ -388,6 +455,12 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
               Kampanye
             </button>
           )}
+          <button 
+            onClick={() => setActiveTab('gallery')}
+            className={`pb-3 sm:pb-4 font-bold px-2 transition-colors text-sm sm:text-base ${activeTab === 'gallery' ? 'border-b-2 border-emerald-600 text-emerald-600' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            Galeri
+          </button>
         </div>
 
         <div className="py-4">
@@ -413,6 +486,72 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
                 <p>Belum ada postingan.</p>
               </div>
             )
+          ) : activeTab === 'gallery' ? (
+            <div className="space-y-6">
+              {isOwnProfile && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                  <button
+                    onClick={() => galleryFileInputRef.current?.click()}
+                    disabled={isUploadingGallery}
+                    className="w-full py-4 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-500 hover:border-emerald-500 hover:text-emerald-600 transition-colors"
+                  >
+                    {isUploadingGallery ? (
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    ) : (
+                      <Upload className="w-8 h-8" />
+                    )}
+                    <span className="font-bold">
+                      {isUploadingGallery ? `Mengunggah... ${galleryUploadProgress}%` : 'Unggah Gambar ke Galeri'}
+                    </span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={galleryFileInputRef}
+                    onChange={handleGalleryUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {galleryImages.map((image) => (
+                  <div key={image.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+                    <img src={image.image_url} alt={image.caption} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                      <p className="text-white text-sm font-medium truncate">{image.caption}</p>
+                      {isOwnProfile && (
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => { setSelectedGalleryImage(image); setGalleryCaptionInput(image.caption); setIsEditingGalleryCaption(true); }} className="p-2 bg-white/20 rounded-lg text-white hover:bg-white/40">
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDeleteImage(image.id)} className="p-2 bg-red-500/20 rounded-lg text-red-200 hover:bg-red-500/40">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {isEditingGalleryCaption && selectedGalleryImage && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+                    <h3 className="font-bold text-lg mb-4">Edit Caption</h3>
+                    <input
+                      type="text"
+                      value={galleryCaptionInput}
+                      onChange={(e) => setGalleryCaptionInput(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-4 py-2 mb-4"
+                      placeholder="Masukkan caption..."
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => setIsEditingGalleryCaption(false)} className="flex-1 px-4 py-2 rounded-xl bg-slate-100">Batal</button>
+                      <button onClick={handleUpdateCaption} className="flex-1 px-4 py-2 rounded-xl bg-emerald-600 text-white">Simpan</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             candidateData && (
               <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-6">

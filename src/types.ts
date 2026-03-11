@@ -153,3 +153,11 @@ export interface Conversation {
   last_message_time: string;
   unread_count: number;
 }
+
+export interface GalleryImage {
+  id: string;
+  user_id: string;
+  image_url: string;
+  caption: string;
+  created_at: string;
+}
