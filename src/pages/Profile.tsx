@@ -1,11 +1,47 @@
-import { useState, useEffect, FormEvent, ChangeEvent, MouseEvent, TouchEvent, useRef } from 'react';
+import React, { useState, useEffect, FormEvent, ChangeEvent, MouseEvent, TouchEvent, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { User, Post, Candidate, GalleryImage } from '../types';
 import { Settings, Edit3, MapPin, Briefcase, Info, X, Camera, MessageSquare, CheckCircle, Image as ImageIcon, Trash2, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PostItem from '../components/PostItem';
-import { getUser, listenToPosts, getCandidates, updateUser, updateCandidate, likePost, pinPost, addGalleryImage, listenToGalleryImages, updateGalleryImageCaption, deleteGalleryImage, uploadFile } from '../lib/db';
+import { getUser, listenToPosts, getCandidates, updateUser, updateCandidate, likePost, pinPost, addGalleryImage, listenToGalleryImages, updateGalleryImageCaption, deleteGalleryImage, uploadFile, getFileFromChunks } from '../lib/db';
 import { compressImage } from '../utils';
+
+interface GalleryImageItemProps {
+  key?: string | number;
+  image: GalleryImage;
+  isOwnProfile: boolean;
+  onEdit: (img: GalleryImage) => void;
+  onDelete: (id: string) => Promise<void>;
+}
+
+function GalleryImageItem({ image, isOwnProfile, onEdit, onDelete }: GalleryImageItemProps) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    getFileFromChunks(image.image_file_id).then(setUrl);
+  }, [image.image_file_id]);
+  
+  if (!url) return <div className="aspect-square bg-slate-200 animate-pulse rounded-2xl" />;
+  
+  return (
+    <div className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+      <img src={url} alt={image.caption} className="w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+        <p className="text-white text-sm font-medium truncate">{image.caption}</p>
+        {isOwnProfile && (
+          <div className="flex gap-2 mt-2">
+            <button onClick={() => onEdit(image)} className="p-2 bg-white/20 rounded-lg text-white hover:bg-white/40">
+              <Edit3 className="w-4 h-4" />
+            </button>
+            <button onClick={() => onDelete(image.id)} className="p-2 bg-red-500/20 rounded-lg text-red-200 hover:bg-red-500/40">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Profile({ user: currentUser, onUpdateUser }: { user: User, onUpdateUser?: (user: User) => void }) {
   const { userId } = useParams();
@@ -515,22 +551,13 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
               )}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {galleryImages.map((image) => (
-                  <div key={image.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
-                    <img src={image.image_url} alt={image.caption} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                      <p className="text-white text-sm font-medium truncate">{image.caption}</p>
-                      {isOwnProfile && (
-                        <div className="flex gap-2 mt-2">
-                          <button onClick={() => { setSelectedGalleryImage(image); setGalleryCaptionInput(image.caption); setIsEditingGalleryCaption(true); }} className="p-2 bg-white/20 rounded-lg text-white hover:bg-white/40">
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDeleteImage(image.id)} className="p-2 bg-red-500/20 rounded-lg text-red-200 hover:bg-red-500/40">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <GalleryImageItem 
+                    key={image.id} 
+                    image={image} 
+                    isOwnProfile={isOwnProfile} 
+                    onEdit={(img) => { setSelectedGalleryImage(img); setGalleryCaptionInput(img.caption); setIsEditingGalleryCaption(true); }}
+                    onDelete={handleDeleteImage}
+                  />
                 ))}
               </div>
               {isEditingGalleryCaption && selectedGalleryImage && (

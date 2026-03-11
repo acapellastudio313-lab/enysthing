@@ -1120,11 +1120,11 @@ export const bulkDeleteCandidates = async (candidateIds: string[], candidatesDat
 };
 
 // Gallery Functions
-export const addGalleryImage = async (userId: string, imageUrl: string, caption: string) => {
+export const addGalleryImage = async (userId: string, fileId: string, caption: string) => {
   const newImageRef = doc(collection(db, "gallery_images"));
   await setDoc(newImageRef, {
     user_id: userId,
-    image_url: imageUrl,
+    image_file_id: fileId,
     caption,
     created_at: serverTimestamp()
   });
@@ -1134,8 +1134,7 @@ export const addGalleryImage = async (userId: string, imageUrl: string, caption:
 export const listenToGalleryImages = (userId: string, callback: (images: any[]) => void) => {
   const q = query(
     collection(db, "gallery_images"),
-    where("user_id", "==", userId),
-    orderBy("created_at", "desc")
+    where("user_id", "==", userId)
   );
   
   return onSnapshot(q, (snapshot) => {
@@ -1143,7 +1142,7 @@ export const listenToGalleryImages = (userId: string, callback: (images: any[]) 
       id: doc.id,
       ...doc.data(),
       created_at: doc.data().created_at?.toDate().toISOString() || new Date().toISOString()
-    }));
+    })).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     callback(images);
   });
 };

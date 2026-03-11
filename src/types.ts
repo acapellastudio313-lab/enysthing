@@ -157,7 +157,7 @@ export interface Conversation {
 export interface GalleryImage {
   id: string;
   user_id: string;
-  image_url: string;
+  image_file_id: string;
   caption: string;
   created_at: string;
 }
