@@ -919,6 +919,14 @@ export const bulkDeleteUsers = async (userIds: string[]) => {
   await batch.commit();
 };
 
+export const bulkApproveUsers = async (userIds: string[]) => {
+  const batch = writeBatch(db);
+  userIds.forEach(id => {
+    batch.update(doc(db, "users", id), { is_approved: 1 });
+  });
+  await batch.commit();
+};
+
 export const bulkDeleteCandidates = async (candidateIds: string[]) => {
   const batch = writeBatch(db);
   candidateIds.forEach(id => {

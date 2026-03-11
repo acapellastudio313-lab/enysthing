@@ -122,7 +122,7 @@ export default function Leaderboard({ user }: { user: User }) {
         </div>
       </div>
 
-      <div className="p-3 md:p-6 max-w-3xl mx-auto">
+      <div className="p-3 md:p-6 w-full mx-auto">
         <div className="space-y-2.5 md:space-y-4">
           {leaderboard.map((entry, index) => {
             const percentage = totalVotes > 0 ? Math.round((entry.vote_count / totalVotes) * 100) : 0;
@@ -140,61 +140,66 @@ export default function Leaderboard({ user }: { user: User }) {
                 }}
                 key={`${entry.id}-${index}`}
                 className={clsx(
-                  "bg-white rounded-xl md:rounded-3xl p-3 md:p-6 flex items-center gap-3 md:gap-6 shadow-sm border transition-all hover:shadow-md",
+                  "bg-white rounded-xl md:rounded-3xl p-3 md:p-6 shadow-sm border transition-all hover:shadow-md group",
                   index === 0 ? "border-yellow-400 ring-1 ring-yellow-400/50" : "border-slate-200"
                 )}
               >
-                <div className="flex flex-col items-center justify-center w-7 md:w-12 shrink-0">
-                  {index === 0 ? (
-                    <Medal className="w-7 h-7 md:w-10 md:h-10 text-yellow-500 drop-shadow-sm" />
-                  ) : index === 1 ? (
-                    <Medal className="w-6 h-6 md:w-8 md:h-8 text-slate-400" />
-                  ) : index === 2 ? (
-                    <Medal className="w-6 h-6 md:w-8 md:h-8 text-amber-600" />
-                  ) : (
-                    <span className="text-base md:text-2xl font-bold text-slate-400">#{index + 1}</span>
-                  )}
-                </div>
-
-                <img src={entry.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={entry.name} className={clsx(
-                  "rounded-full border-2 md:border-4 object-cover shrink-0",
-                  index === 0 ? "w-12 h-12 md:w-20 md:h-20 border-yellow-100" : "w-10 h-10 md:w-16 md:h-16 border-slate-50"
-                )} />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start md:items-end mb-1 md:mb-2 gap-2">
-                    <div className="min-w-0">
-                      <h3 className={clsx(
-                        "font-bold truncate leading-tight",
-                        index === 0 ? "text-sm md:text-2xl text-slate-900" : "text-xs md:text-xl text-slate-800"
-                      )}>{entry.name}</h3>
-                      <p className="text-slate-500 text-[9px] md:text-sm truncate">@{entry.username}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={clsx(
-                        "font-black tracking-tight leading-none",
-                        index === 0 ? "text-lg md:text-3xl text-emerald-600" : "text-base md:text-2xl text-slate-700"
-                      )}>
-                        {percentage}%
-                      </p>
-                      <p className="text-[9px] md:text-sm text-slate-500 font-medium">{entry.vote_count} suara</p>
-                    </div>
+                <div className={clsx(
+                  "flex items-center gap-3 md:gap-6 w-full transition-all duration-500",
+                  user.role === 'admin' ? "md:blur-md md:group-hover:blur-0" : ""
+                )}>
+                  <div className="flex flex-col items-center justify-center w-7 md:w-12 shrink-0">
+                    {index === 0 ? (
+                      <Medal className="w-7 h-7 md:w-10 md:h-10 text-yellow-500 drop-shadow-sm" />
+                    ) : index === 1 ? (
+                      <Medal className="w-6 h-6 md:w-8 md:h-8 text-slate-400" />
+                    ) : index === 2 ? (
+                      <Medal className="w-6 h-6 md:w-8 md:h-8 text-amber-600" />
+                    ) : (
+                      <span className="text-base md:text-2xl font-bold text-slate-400">#{index + 1}</span>
+                    )}
                   </div>
 
-                  {/* Progress Bar */}
-                  <div className="h-1.5 md:h-3 w-full bg-slate-100 rounded-full overflow-hidden mt-1.5 md:mt-3">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${percentage}%` }}
-                      transition={{ duration: 1, ease: "easeOut" }}
-                      className={clsx(
-                        "h-full rounded-full",
-                        index === 0 ? "bg-gradient-to-r from-yellow-400 to-yellow-500" :
-                        index === 1 ? "bg-gradient-to-r from-slate-400 to-slate-500" :
-                        index === 2 ? "bg-gradient-to-r from-amber-600 to-amber-700" :
-                        "bg-emerald-500"
-                      )}
-                    />
+                  <img src={entry.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={entry.name} className={clsx(
+                    "rounded-full border-2 md:border-4 object-cover shrink-0",
+                    index === 0 ? "w-12 h-12 md:w-20 md:h-20 border-yellow-100" : "w-10 h-10 md:w-16 md:h-16 border-slate-50"
+                  )} />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start md:items-end mb-1 md:mb-2 gap-2">
+                      <div className="min-w-0">
+                        <h3 className={clsx(
+                          "font-bold truncate leading-tight",
+                          index === 0 ? "text-sm md:text-2xl text-slate-900" : "text-xs md:text-xl text-slate-800"
+                        )}>{entry.name}</h3>
+                        <p className="text-slate-500 text-[9px] md:text-sm truncate">@{entry.username}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={clsx(
+                          "font-black tracking-tight leading-none",
+                          index === 0 ? "text-lg md:text-3xl text-emerald-600" : "text-base md:text-2xl text-slate-700"
+                        )}>
+                          {percentage}%
+                        </p>
+                        <p className="text-[9px] md:text-sm text-slate-500 font-medium">{entry.vote_count} suara</p>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="h-1.5 md:h-3 w-full bg-slate-100 rounded-full overflow-hidden mt-1.5 md:mt-3">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percentage}%` }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className={clsx(
+                          "h-full rounded-full",
+                          index === 0 ? "bg-gradient-to-r from-yellow-400 to-yellow-500" :
+                          index === 1 ? "bg-gradient-to-r from-slate-400 to-slate-500" :
+                          index === 2 ? "bg-gradient-to-r from-amber-600 to-amber-700" :
+                          "bg-emerald-500"
+                        )}
+                      />
+                    </div>
                   </div>
                 </div>
               </motion.div>

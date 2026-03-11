@@ -27,6 +27,7 @@ import {
   uploadBase64ToStorage,
   notifyAllUsers,
   bulkDeleteUsers,
+  bulkApproveUsers,
   bulkDeleteCandidates,
   sendSystemNotification,
   triggerAppRefresh
@@ -1339,6 +1340,18 @@ export default function AdminDashboard({ user }: { user: User }) {
               <div className="flex gap-2">
                 {selectedUserIds.length > 0 && (
                   <>
+                    <button 
+                      onClick={async () => {
+                        if (!confirm(`Setujui ${selectedUserIds.length} pengguna?`)) return;
+                        await bulkApproveUsers(selectedUserIds);
+                        toast.success('Pengguna berhasil disetujui');
+                        fetchUsers();
+                        setSelectedUserIds([]);
+                      }}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm flex items-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Setujui Terpilih
+                    </button>
                     <button 
                       onClick={async () => {
                         if (!confirm(`Hapus ${selectedUserIds.length} pengguna?`)) return;

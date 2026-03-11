@@ -47,7 +47,7 @@ export default function Entertainment({ user }: { user: User }) {
   const isAdminOrMod = user.role === 'admin' || user.role === 'moderator';
 
   return (
-    <div className="w-full max-w-2xl mx-auto pb-20 md:pb-0">
+    <div className="w-full mx-auto pb-20 md:pb-0">
       <div className="bg-white sticky top-[60px] z-20 border-b border-slate-100 px-4 pt-2">
         <div className="flex gap-4">
           <button
