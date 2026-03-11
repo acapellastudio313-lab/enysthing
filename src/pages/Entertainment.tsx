@@ -4,7 +4,7 @@ import { User } from '../types';
 import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, deleteDoc, serverTimestamp, query, where, orderBy, writeBatch } from 'firebase/firestore';
-import { getAllUsers, listenToSettings, notifyAllUsers } from '../lib/db';
+import { getAllUsers, listenToSettings } from '../lib/db';
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 
@@ -255,14 +255,6 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
       lastUpdated: Date.now()
     });
 
-    await notifyAllUsers({
-      type: 'system',
-      message: 'Pengacakan nomor sedang berlangsung! Cek nomor Anda sekarang di menu Dapatkan Nomor.',
-      actor_name: 'Sistem',
-      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
-      link: '/entertainment?tab=number'
-    });
-
     // Reset generating flag after animation duration
     setTimeout(() => {
       updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
@@ -322,14 +314,6 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
       lastUpdated: Date.now()
     });
     
-    await notifyAllUsers({
-      type: 'system',
-      message: `Nomor custom untuk @${username} telah diset! Cek di menu Dapatkan Nomor.`,
-      actor_name: 'Sistem',
-      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
-      link: '/entertainment?tab=number'
-    });
-
     // Reset generating flag after animation duration
     setTimeout(() => {
       updateDoc(doc(db, 'entertainment', 'number'), { isGenerating: false });
@@ -668,14 +652,6 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       currentQuestionIndex: 0,
       endTime: Date.now() + (firstQ.timeLimit * 1000)
     });
-
-    await notifyAllUsers({
-      type: 'system',
-      message: 'Kuis Interaktif telah dimulai! Ayo bergabung dan jawab pertanyaannya di menu Hiburan.',
-      actor_name: 'Sistem',
-      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
-      link: '/entertainment?tab=kuis'
-    });
   };
 
   const handleNextQuestion = async () => {
@@ -691,14 +667,6 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       await updateDoc(doc(db, 'entertainment', 'quiz'), {
         status: 'finished',
         endTime: null
-      });
-
-      await notifyAllUsers({
-        type: 'system',
-        message: 'Kuis Interaktif telah selesai! Cek hasilnya sekarang di menu Hiburan.',
-        actor_name: 'Sistem',
-        actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff',
-        link: '/entertainment?tab=kuis'
       });
     }
   };
@@ -748,14 +716,6 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       status: 'waiting',
       currentQuestionIndex: 0,
       endTime: null
-    });
-
-    await notifyAllUsers({
-      type: 'system',
-      message: 'Kuis Interaktif telah dihentikan.',
-      actor_name: 'Sistem',
-      actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff',
-      link: '/entertainment?tab=kuis'
     });
   };
 

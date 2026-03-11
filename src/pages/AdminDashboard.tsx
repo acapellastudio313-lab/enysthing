@@ -25,7 +25,6 @@ import {
   createUser,
   getCandidateVoters,
   uploadBase64ToStorage,
-  notifyAllUsers,
   bulkDeleteUsers,
   bulkApproveUsers,
   bulkDeleteCandidates,
@@ -370,25 +369,6 @@ export default function AdminDashboard({ user }: { user: User }) {
 
       await updateSetting('election_status', status);
       
-      // Notify all users
-      if (status === 'in_progress') {
-        await notifyAllUsers({
-          type: 'system',
-          message: 'Pemilihan telah dimulai! Silakan berikan suara Anda di menu Kandidat.',
-          actor_name: 'Sistem',
-          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
-          link: '/candidates'
-        });
-      } else if (status === 'closed') {
-        await notifyAllUsers({
-          type: 'system',
-          message: 'Pemilihan telah ditutup! Cek hasil akhir di menu Klasemen.',
-          actor_name: 'Sistem',
-          actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=ef4444&color=fff',
-          link: '/leaderboard'
-        });
-      }
-
       // Do NOT setElectionStatus(status) here again, let the listener handle it
       setStatusMessage({ type: 'success', text: 'Status pemilihan berhasil diperbarui' });
       setTimeout(() => setStatusMessage(null), 3000);
