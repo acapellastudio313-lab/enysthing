@@ -880,8 +880,18 @@ export const addCandidate = async (userId: string, data: any) => {
 };
 
 export const removeCandidate = async (candidateId: string, userId: string) => {
-  await deleteDoc(doc(db, "candidates", candidateId));
-  await updateDoc(doc(db, "users", userId), { role: "voter" });
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "candidates", candidateId));
+  if (userId && typeof userId === 'string' && userId.trim() !== '') {
+    batch.update(doc(db, "users", userId), { role: "voter" });
+  }
+  
+  // Delete all votes for this candidate
+  const votesQuery = query(collection(db, "votes"), where("candidate_id", "==", candidateId));
+  const votesSnapshot = await getDocs(votesQuery);
+  votesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+  
+  await batch.commit();
 };
 
 export const resetVotes = async () => {
@@ -927,10 +937,23 @@ export const bulkApproveUsers = async (userIds: string[]) => {
   await batch.commit();
 };
 
-export const bulkDeleteCandidates = async (candidateIds: string[]) => {
+export const bulkDeleteCandidates = async (candidateIds: string[], candidatesData: any[]) => {
   const batch = writeBatch(db);
-  candidateIds.forEach(id => {
+  
+  for (const id of candidateIds) {
     batch.delete(doc(db, "candidates", id));
-  });
+    
+    // Find candidate data to get user_id
+    const candidate = candidatesData.find(c => c.id === id);
+    if (candidate && candidate.user_id && typeof candidate.user_id === 'string' && candidate.user_id.trim() !== '') {
+      batch.update(doc(db, "users", candidate.user_id), { role: "voter" });
+    }
+    
+    // Delete all votes for this candidate
+    const votesQuery = query(collection(db, "votes"), where("candidate_id", "==", id));
+    const votesSnapshot = await getDocs(votesQuery);
+    votesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+  }
+  
   await batch.commit();
 };

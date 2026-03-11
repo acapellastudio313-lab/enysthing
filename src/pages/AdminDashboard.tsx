@@ -469,18 +469,18 @@ export default function AdminDashboard({ user }: { user: User }) {
     if (selectedCandidateIds.length === 0) return;
     if (!confirm(`Hapus ${selectedCandidateIds.length} kandidat?`)) return;
     try {
-      const batch = writeBatch(db);
-      selectedCandidateIds.forEach(id => {
-        const candidate = candidates.find(c => c.id === id);
-        if (candidate) {
-          batch.delete(doc(db, 'candidates', id));
-          batch.update(doc(db, 'users', candidate.user_id), { role: 'voter' });
-        }
-      });
-      await batch.commit();
+      await bulkDeleteCandidates(selectedCandidateIds, candidates);
       toast.success('Kandidat berhasil dihapus');
       fetchCandidates();
       setSelectedCandidateIds([]);
+      
+      // Update other stats
+      const s = await getStats();
+      setStats(s);
+      const u = await getAllUsers();
+      setUsers(u);
+      const l = await getLeaderboard();
+      setLeaderboard(l);
     } catch (err) {
       console.error(err);
       toast.error('Gagal menghapus kandidat');
