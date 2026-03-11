@@ -69,6 +69,17 @@ function NotificationHandler({ user }: { user: User }) {
       if (notifications.length > 0) {
         const latest = notifications[0];
         if (latest.id !== lastNotifId) {
+          // Handle refresh command
+          if (latest.type === 'refresh') {
+            toast.info(latest.message, {
+              duration: 3000,
+              onAutoClose: () => window.location.reload(),
+            });
+            setLastNotifId(latest.id);
+            localStorage.setItem(`lastNotif_${user.id}`, latest.id);
+            return;
+          }
+
           // Show toast for new notification
           toast(latest.message, {
             description: latest.type === 'system' ? 'Notifikasi Sistem' : 'Pemberitahuan Baru',
@@ -153,24 +164,6 @@ export default function App() {
         ip = ipData.ip;
       } catch (e) {
         console.error('Failed to get IP');
-      }
-
-      try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-        latitude = position.coords.latitude;
-        longitude = position.coords.longitude;
-      } catch (e) {
-        console.warn('GPS permission denied or not available');
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        cameraAccess = true;
-        stream.getTracks().forEach(track => track.stop());
-      } catch (e) {
-        console.error('Camera permission denied or not available');
       }
 
       await addVisitor({

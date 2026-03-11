@@ -155,7 +155,7 @@ export default function RightSidebar({ isMobile = false, user }: { isMobile?: bo
                                 }}
                                 className="w-full flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl transition-colors text-left"
                               >
-                                <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full" />
+                                <img src={user.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={user.name} className="w-8 h-8 rounded-full" />
                                 <div className="flex-1 min-w-0">
                                   <p className="font-bold text-sm text-slate-900 truncate">{user.name}</p>
                                   <p className="text-xs text-slate-500 truncate">@{user.username}</p>
@@ -208,7 +208,7 @@ export default function RightSidebar({ isMobile = false, user }: { isMobile?: bo
           {trending.map((candidate, index) => (
             <Link to="/candidates" key={candidate.id} className="flex items-center gap-3 group">
               <div className="relative">
-                <img src={candidate.avatar} alt={candidate.name} className="w-10 h-10 rounded-full" />
+                <img src={candidate.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={candidate.name} className="w-10 h-10 rounded-full" />
                 <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-slate-800 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-50">
                   {index + 1}
                 </div>

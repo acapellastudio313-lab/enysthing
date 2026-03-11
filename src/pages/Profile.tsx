@@ -320,7 +320,7 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
         <div className="flex flex-col sm:flex-row justify-between items-center sm:items-end -mt-12 sm:-mt-16 mb-4 gap-4">
           <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white shadow-md relative z-10 bg-white overflow-hidden">
             <img
-              src={profileUser.avatar}
+              src={profileUser.avatar || 'https://picsum.photos/seed/avatar/48/48'}
               alt={profileUser.name}
               className="w-full h-full object-cover"
               style={{ objectPosition: profileUser.avatar_position || '50% 50%' }}
@@ -426,7 +426,7 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
                       >
                         {campaignForm.image_url ? (
                           <>
-                            <img src={campaignForm.image_url} alt="Campaign" className="w-full h-full object-cover" />
+                            <img src={campaignForm.image_url || undefined} alt="Campaign" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                               <Camera className="w-8 h-8 text-white" />
                             </div>
@@ -512,7 +512,7 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
                   <>
                     {candidateData.image_url && (
                       <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                        <img src={candidateData.image_url} alt="Campaign" className="w-full h-auto object-cover max-h-[400px]" />
+                        <img src={candidateData.image_url || undefined} alt="Campaign" className="w-full h-auto object-cover max-h-[400px]" />
                       </div>
                     )}
 
@@ -634,7 +634,7 @@ export default function Profile({ user: currentUser, onUpdateUser }: { user: Use
                     {editForm.avatar ? (
                       <>
                         <img 
-                          src={editForm.avatar} 
+                          src={editForm.avatar || 'https://picsum.photos/seed/avatar/48/48'} 
                           alt="Avatar" 
                           className="w-full h-full object-cover pointer-events-none" 
                           style={{ objectPosition: `${avatarPos.x}% ${avatarPos.y}%` }}

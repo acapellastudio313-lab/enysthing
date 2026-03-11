@@ -263,7 +263,7 @@ export default function Messages({ user }: { user: User }) {
                     onClick={() => handleStartChat(u)}
                     className="w-full p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors"
                   >
-                    <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover" />
+                    <img src={u.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={u.name} className="w-10 h-10 rounded-full object-cover" />
                     <div className="text-left">
                       <h3 className="font-bold text-slate-900 text-sm">{u.name}</h3>
                       <p className="text-xs text-slate-500">@{u.username}</p>
@@ -282,7 +282,7 @@ export default function Messages({ user }: { user: User }) {
                 className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors border-b border-slate-50 ${selectedConversation?.id === conv.id ? 'bg-emerald-50/50' : ''}`}
               >
                 <div className="relative shrink-0">
-                  <img src={conv.avatar} alt={conv.name} className="w-12 h-12 rounded-full object-cover" />
+                  <img src={conv.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={conv.name} className="w-12 h-12 rounded-full object-cover" />
                   {conv.unread_count > 0 && (
                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
                       {conv.unread_count}
@@ -326,7 +326,7 @@ export default function Messages({ user }: { user: User }) {
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
-                <img src={selectedConversation.avatar} alt={selectedConversation.name} className="w-10 h-10 rounded-full object-cover" />
+                <img src={selectedConversation.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={selectedConversation.name} className="w-10 h-10 rounded-full object-cover" />
                 <div>
                   <h2 className="font-bold text-slate-900 text-sm">{selectedConversation.name}</h2>
                   <p className="text-[10px] text-emerald-600 font-medium">Online</p>
@@ -370,14 +370,14 @@ export default function Messages({ user }: { user: User }) {
                         {(msg.attachment_url || msg.attachment_file_id) && (
                           <div className="mb-2">
                             {msg.attachment_type === 'image' && (
-                              <img src={msg.attachment_url || messageMedia[msg.id]} alt="Attachment" className="max-w-full rounded-lg" />
+                              <img src={msg.attachment_url || messageMedia[msg.id] || undefined} alt="Attachment" className="max-w-full rounded-lg" />
                             )}
                             {msg.attachment_type === 'video' && (
                               <div className="relative min-h-[100px] flex items-center justify-center">
                                 {loadingMedia[msg.id] ? (
                                   <Loader2 className="w-6 h-6 animate-spin" />
                                 ) : (
-                                  <video src={msg.attachment_url || messageMedia[msg.id]} controls className="max-w-full rounded-lg" />
+                                  <video src={msg.attachment_url || messageMedia[msg.id] || undefined} controls className="max-w-full rounded-lg" />
                                 )}
                               </div>
                             )}

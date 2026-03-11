@@ -195,7 +195,7 @@ function StoryViewer({
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 pt-6 px-4 pb-12 bg-gradient-to-b from-black/60 to-transparent z-30 flex items-start justify-between pointer-events-none">
           <div className="flex items-center gap-3 pointer-events-auto">
-            <img src={currentGroup.user_avatar} alt={currentGroup.user_name} className="w-10 h-10 rounded-full border border-white/20" />
+            <img src={currentGroup.user_avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={currentGroup.user_name} className="w-10 h-10 rounded-full border border-white/20" />
             <div>
               <p className="text-white font-bold text-sm">{currentGroup.user_name}</p>
               <p className="text-white/70 text-xs">{formatDateWIB(currentStory.created_at)}</p>
@@ -240,7 +240,7 @@ function StoryViewer({
                 {currentStory.media_type === 'video' ? (
                   <video 
                     ref={videoRef}
-                    src={currentStory.media_url} 
+                    src={currentStory.media_url || undefined} 
                     autoPlay 
                     playsInline
                     muted={false}
@@ -251,7 +251,7 @@ function StoryViewer({
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-slate-900">
                     <img 
-                      src={currentStory.media_url} 
+                      src={currentStory.media_url || undefined} 
                       alt="Story" 
                       className="w-full h-full object-contain" 
                     />
@@ -337,7 +337,7 @@ function StoryViewer({
                   <div className="flex flex-col gap-4">
                     {currentStory.views?.filter(v => v.id !== currentUser.id).map(viewer => (
                       <div key={viewer.id} className="flex items-center gap-3">
-                        <img src={viewer.avatar} alt={viewer.name} className="w-10 h-10 rounded-full" />
+                        <img src={viewer.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={viewer.name} className="w-10 h-10 rounded-full" />
                         <div>
                           <p className="text-white font-medium">{viewer.name}</p>
                           <p className="text-slate-400 text-xs">{formatDateWIB(viewer.viewed_at)}</p>
@@ -483,7 +483,7 @@ export default function Stories({ user }: { user: User }) {
       setShowCamera(true);
     } catch (e) {
       console.error('Error accessing camera:', e);
-      alert('Gagal mengakses kamera. Pastikan Anda telah memberikan izin.');
+      toast.error('Gagal mengakses kamera. Pastikan Anda telah memberikan izin.');
     }
   };
 
@@ -662,7 +662,7 @@ export default function Stories({ user }: { user: User }) {
         {/* Add Story Button */}
         <div className="flex flex-col items-center gap-1 shrink-0 cursor-pointer" onClick={() => setShowCamera(true)}>
           <div className="relative">
-            <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 p-0.5" />
+            <img src={user.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={user.name} className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 p-0.5" />
             <div className="absolute bottom-0 right-0 bg-emerald-500 text-white rounded-full p-1 border-2 border-white">
               <Plus className="w-3 h-3" />
             </div>
@@ -688,7 +688,7 @@ export default function Stories({ user }: { user: User }) {
                 !allViewed ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-orange-500 to-fuchsia-600" : "p-[1px] bg-slate-200"
               )}>
                 <img 
-                  src={group.user_avatar} 
+                  src={group.user_avatar || 'https://picsum.photos/seed/avatar/48/48'} 
                   alt={group.user_name} 
                   className="w-full h-full rounded-full object-cover border-2 border-white"
                 />
@@ -779,9 +779,9 @@ export default function Stories({ user }: { user: User }) {
                 <TransformWrapper>
                   <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
                     {uploadMedia.type === 'video' ? (
-                      <video src={uploadMedia.url} controls autoPlay className="w-full h-full object-contain" />
+                      <video src={uploadMedia.url || undefined} controls autoPlay className="w-full h-full object-contain" />
                     ) : (
-                      <img src={uploadMedia.url} alt="Preview" className="w-full h-full object-contain" />
+                      <img src={uploadMedia.url || undefined} alt="Preview" className="w-full h-full object-contain" />
                     )}
                   </TransformComponent>
                 </TransformWrapper>
@@ -948,7 +948,7 @@ export default function Stories({ user }: { user: User }) {
                         setTagSearch('');
                       }}
                     >
-                      <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full" />
+                      <img src={u.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={u.name} className="w-10 h-10 rounded-full" />
                       <div>
                         <p className="text-white font-medium">{u.name}</p>
                         <p className="text-slate-400 text-sm">@{u.username}</p>

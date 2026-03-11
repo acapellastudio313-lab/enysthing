@@ -112,7 +112,7 @@ export default function Leaderboard({ user }: { user: User }) {
               <div className="flex flex-wrap gap-2">
                 {nonVoters.map(voter => (
                   <div key={voter.id} className="flex items-center gap-1.5 bg-white/10 px-2 py-1 rounded-lg border border-white/5">
-                    <img src={voter.avatar} alt={voter.name} className="w-4 h-4 md:w-5 md:h-5 rounded-full object-cover" />
+                    <img src={voter.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={voter.name} className="w-4 h-4 md:w-5 md:h-5 rounded-full object-cover" />
                     <span className="text-[10px] md:text-xs font-medium truncate max-w-[80px] md:max-w-[120px]">{voter.name}</span>
                   </div>
                 ))}
@@ -156,7 +156,7 @@ export default function Leaderboard({ user }: { user: User }) {
                   )}
                 </div>
 
-                <img src={entry.avatar} alt={entry.name} className={clsx(
+                <img src={entry.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={entry.name} className={clsx(
                   "rounded-full border-2 md:border-4 object-cover shrink-0",
                   index === 0 ? "w-12 h-12 md:w-20 md:h-20 border-yellow-100" : "w-10 h-10 md:w-16 md:h-16 border-slate-50"
                 )} />

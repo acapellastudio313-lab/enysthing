@@ -118,7 +118,7 @@ export interface Notification {
   user_id: string;
   actor_id?: string;
   from_user_id?: string;
-  type: 'like' | 'comment' | 'register' | 'story_tag' | 'system';
+  type: 'like' | 'comment' | 'register' | 'story_tag' | 'system' | 'refresh';
   post_id?: string;
   story_id?: string;
   is_read: number;

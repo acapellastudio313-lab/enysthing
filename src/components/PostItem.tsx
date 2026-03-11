@@ -265,7 +265,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
               className="mt-3 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer"
               onClick={() => setIsImageModalOpen(true)}
             >
-              <img src={post.image_url} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
+              <img src={post.image_url || null} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
             </div>
           )}
 
@@ -280,7 +280,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                 </div>
               ) : videoSrc ? (
                 <video 
-                  src={videoSrc} 
+                  src={videoSrc || null} 
                   controls 
                   playsInline
                   preload="metadata"
@@ -313,7 +313,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                 </div>
               ) : documentSrc ? (
                 <a 
-                  href={documentSrc} 
+                  href={documentSrc || null} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
@@ -342,7 +342,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   </span>
                 </div>
               ) : audioSrc ? (
-                <audio src={audioSrc} controls className="w-full h-10" />
+                <audio src={audioSrc || null} controls className="w-full h-10" />
               ) : !post.is_uploading ? (
                 <div className="text-xs text-red-500 p-1">Gagal memuat audio</div>
               ) : null}
@@ -443,7 +443,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                 ) : (
                   likers.map(liker => (
                     <Link to={`/profile/${liker.id}`} key={liker.id} className="flex items-center gap-3 hover:bg-slate-50 p-2 rounded-xl transition-colors">
-                      <img src={liker.avatar} alt={liker.name} className="w-10 h-10 rounded-full" />
+                      <img src={liker.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={liker.name} className="w-10 h-10 rounded-full" />
                       <div>
                         <p className="font-bold text-slate-900 text-sm">{liker.name}</p>
                         <p className="text-slate-500 text-xs">@{liker.username}</p>
@@ -468,7 +468,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
             <div className="mt-3 md:mt-4 pl-0 md:pl-12 pr-0 md:pr-4 space-y-4">
               {/* Comment Input */}
               <form onSubmit={handleCommentSubmit} className="flex gap-2 md:gap-3 items-start">
-                <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full shrink-0 hidden md:block" />
+                <img src={user.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={user.name} className="w-8 h-8 rounded-full shrink-0 hidden md:block" />
                 <div className="flex-1 relative">
                   <input
                     type="text"
@@ -495,7 +495,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   {comments.map((comment) => (
                     <div key={comment.id} className="flex gap-3">
                       <Link to={`/profile/${comment.author_id}`}>
-                        <img src={comment.avatar} alt={comment.name} className="w-8 h-8 rounded-full shrink-0 hover:opacity-80 transition-opacity" />
+                        <img src={comment.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={comment.name} className="w-8 h-8 rounded-full shrink-0 hover:opacity-80 transition-opacity" />
                       </Link>
                       <div className="flex-1 bg-slate-50 rounded-2xl px-4 py-2">
                         <div className="flex items-baseline gap-2">
@@ -576,7 +576,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.9, opacity: 0 }}
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    src={post.image_url}
+                    src={post.image_url || null}
                     alt="Post attachment full size"
                     className="max-w-full max-h-full object-contain rounded-lg shadow-2xl pointer-events-auto"
                   />

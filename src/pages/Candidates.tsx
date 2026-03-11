@@ -217,7 +217,7 @@ export default function Candidates({ user }: { user: User }) {
           >
             <div className="flex flex-col sm:flex-row items-start gap-3 md:gap-4">
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                <img src={candidate.avatar} alt={candidate.name} className="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-slate-100" />
+                <img src={candidate.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={candidate.name} className="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-slate-100" />
                 <div className="sm:hidden flex-1">
                   <h3 className="font-bold text-base text-slate-900">{candidate.name}</h3>
                   <p className="text-slate-500 text-xs">@{candidate.username}</p>
@@ -294,7 +294,7 @@ export default function Candidates({ user }: { user: User }) {
                 <div className="flex flex-col items-center text-center gap-4 mb-8 mt-4">
                   <div className="relative">
                     <img 
-                      src={selectedCandidate.avatar} 
+                      src={selectedCandidate.avatar || 'https://picsum.photos/seed/avatar/48/48'} 
                       alt={selectedCandidate.name} 
                       className="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-emerald-50 shadow-lg object-cover" 
                     />
@@ -318,7 +318,7 @@ export default function Candidates({ user }: { user: User }) {
 
                   {selectedCandidate.image_url && (
                     <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                      <img src={selectedCandidate.image_url} alt="Campaign" className="w-full h-auto object-cover" />
+                      <img src={selectedCandidate.image_url || undefined} alt="Campaign" className="w-full h-auto object-cover" />
                     </div>
                   )}
 

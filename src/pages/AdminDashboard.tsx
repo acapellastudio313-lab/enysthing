@@ -28,7 +28,8 @@ import {
   notifyAllUsers,
   bulkDeleteUsers,
   bulkDeleteCandidates,
-  sendSystemNotification
+  sendSystemNotification,
+  triggerAppRefresh
 } from '../lib/db';
 import { compressImage } from '../utils';
 
@@ -1058,7 +1059,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <div className="flex items-center gap-4">
                     {appLogo && (
                       <div className="w-12 h-12 rounded-lg border border-slate-200 overflow-hidden bg-white shrink-0">
-                        <img src={appLogo} alt="Logo Preview" className="w-full h-full object-contain" />
+                        <img src={appLogo || null} alt="Logo Preview" className="w-full h-full object-contain" />
                       </div>
                     )}
                     <div className="flex-1">
@@ -1195,7 +1196,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <div className="flex items-center gap-4">
                     {seoImage && (
                       <div className="w-12 h-12 rounded-lg border border-slate-200 overflow-hidden bg-white shrink-0">
-                        <img src={seoImage} alt="SEO Preview" className="w-full h-full object-contain" />
+                        <img src={seoImage || null} alt="SEO Preview" className="w-full h-full object-contain" />
                       </div>
                     )}
                     <div className="flex-1">
@@ -1373,6 +1374,16 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <CheckCircle className="w-4 h-4" /> Setujui Semua
                 </button>
                 <button
+                  onClick={async () => {
+                    if (!confirm('Apakah Anda yakin ingin memuat ulang aplikasi untuk semua pengguna?')) return;
+                    await triggerAppRefresh();
+                    toast.success('Perintah muat ulang dikirim');
+                  }}
+                  className="px-4 py-2 bg-slate-800 text-white rounded-xl font-medium hover:bg-slate-900 transition-colors text-sm flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" /> Refresh App
+                </button>
+                <button
                   onClick={() => setIsAddingUser(true)}
                   className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm flex items-center gap-2"
                 >
@@ -1422,7 +1433,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     </td>
                     <td className="px-4 py-3">
                       <Link to={`/profile/${u.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover" />
+                        <img src={u.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={u.name} className="w-8 h-8 rounded-full object-cover" />
                         <div>
                           <div className="font-medium text-slate-900 flex items-center gap-1">
                             {u.name}
@@ -1478,7 +1489,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           <div className="divide-y divide-slate-100">
             {posts.map((post, idx) => (
               <div key={`${post.id}-${idx}`} className="p-4 hover:bg-slate-50 transition-colors flex gap-4">
-                <img src={post.avatar} alt={post.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                <img src={post.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={post.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start">
                     <div>
@@ -1497,10 +1508,10 @@ export default function AdminDashboard({ user }: { user: User }) {
                   </div>
                   <p className="text-slate-800 text-sm mt-1 mb-2">{post.content}</p>
                   {post.image_url && (
-                    <img src={post.image_url} alt="Post attachment" className="rounded-lg max-h-48 object-cover mb-2" />
+                    <img src={post.image_url || null} alt="Post attachment" className="rounded-lg max-h-48 object-cover mb-2" />
                   )}
                   {post.video_url && (
-                    <video src={post.video_url} controls className="rounded-lg max-h-48 object-cover mb-2 w-full" />
+                    <video src={post.video_url || null} controls className="rounded-lg max-h-48 object-cover mb-2 w-full" />
                   )}
                   {post.document_url && (
                     <a href={post.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors mb-2">
@@ -1509,7 +1520,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     </a>
                   )}
                   {post.audio_url && (
-                    <audio src={post.audio_url} controls className="w-full h-8 mb-2" />
+                    <audio src={post.audio_url || null} controls className="w-full h-8 mb-2" />
                   )}
                   <div className="flex gap-4 text-xs text-slate-500">
                     <span>{post.likes_count} Suka</span>
@@ -1567,7 +1578,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                   }}
                   className="mt-4"
                 />
-                <img src={candidate.avatar} alt={candidate.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
+                <img src={candidate.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={candidate.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start">
                     <div>
@@ -1648,7 +1659,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                         }`}>
                           #{index + 1}
                         </div>
-                        <img src={item.avatar} alt={item.name} className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover shrink-0" />
+                        <img src={item.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={item.name} className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover shrink-0" />
                         <div className="flex-1 min-w-0">
                           <h3 className="font-bold text-slate-900 text-sm md:text-base truncate">{item.name}</h3>
                           <p className="text-[10px] md:text-xs text-slate-500 truncate">@{item.username}</p>
@@ -1999,7 +2010,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                             className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
                         />
                         <div className="flex items-center gap-2">
-                            <img src={u.avatar} alt={u.name} className="w-6 h-6 rounded-full" />
+                            <img src={u.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={u.name} className="w-6 h-6 rounded-full" />
                             <div>
                                 <p className="text-sm font-medium text-slate-900">{u.name}</p>
                                 <p className="text-xs text-slate-500">@{u.username}</p>
@@ -2202,7 +2213,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                 <div className="divide-y divide-slate-100">
                   {votersModal.voters.map((voter, idx) => (
                     <div key={idx} className="p-3 flex items-center gap-3 hover:bg-slate-50">
-                      <img src={voter.avatar} alt={voter.name} className="w-10 h-10 rounded-full object-cover" />
+                      <img src={voter.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={voter.name} className="w-10 h-10 rounded-full object-cover" />
                       <div>
                         <div className="font-medium text-slate-900 text-sm">{voter.name}</div>
                         <div className="text-xs text-slate-500">@{voter.username}</div>

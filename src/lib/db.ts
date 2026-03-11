@@ -521,6 +521,37 @@ export const notifyAllUsers = async (notificationData: any) => {
   }
 };
 
+export const triggerAppRefresh = async () => {
+  try {
+    const usersSnapshot = await getDocs(collection(db, "users"));
+    const batch = writeBatch(db);
+    let count = 0;
+    
+    usersSnapshot.docs.forEach(userDoc => {
+      const userData = userDoc.data();
+      // Skip admins
+      if (userData.role === 'admin') return;
+
+      const userRef = userDoc.ref;
+      const notifRef = doc(collection(userRef, "notifications"));
+      batch.set(notifRef, {
+        type: 'refresh',
+        message: 'Aplikasi sedang diperbarui, memuat ulang...',
+        user_id: userDoc.id,
+        created_at: serverTimestamp(),
+        is_read: 0
+      });
+      count++;
+    });
+    
+    if (count > 0) {
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error("Error triggering app refresh:", error);
+  }
+};
+
 export const notifyAdmins = async (notificationData: any) => {
   try {
     const adminsQuery = query(collection(db, "users"), where("role", "==", "admin"));

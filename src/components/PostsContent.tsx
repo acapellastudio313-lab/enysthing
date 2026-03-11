@@ -48,7 +48,7 @@ export default function PostsContent({ posts }: PostsContentProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
                   <div className="flex items-center gap-2">
-                    <img src={post.avatar} className="w-6 h-6 rounded-full" alt="" />
+                    <img src={post.avatar || 'https://picsum.photos/seed/avatar/48/48'} className="w-6 h-6 rounded-full" alt="" />
                     <span className="text-sm text-slate-600 font-medium">@{post.username}</span>
                   </div>
                 </td>

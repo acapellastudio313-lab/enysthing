@@ -363,7 +363,7 @@ export default function Home({ user }: { user: User }) {
       {/* Create Post Section */}
       <div className="p-3 md:p-4 border-b border-slate-200 bg-white">
         <div className="flex gap-3 md:gap-4">
-          <img src={user.avatar} alt={user.name} className="w-10 h-10 md:w-12 md:h-12 rounded-full hidden sm:block" />
+          <img src={user.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={user.name} className="w-10 h-10 md:w-12 md:h-12 rounded-full hidden sm:block" />
           <form onSubmit={handlePost} className="flex-1">
             <textarea
               value={newPost}
@@ -376,7 +376,7 @@ export default function Home({ user }: { user: User }) {
               <div className="mb-3 relative">
                 {imageUrl.startsWith('data:image') ? (
                   <div className="relative inline-block">
-                    <img src={imageUrl} alt="Preview" className="max-h-48 rounded-xl object-cover" />
+                    <img src={imageUrl || null} alt="Preview" className="max-h-48 rounded-xl object-cover" />
                     <button 
                       type="button" 
                       onClick={() => { setShowImageInput(false); setImageUrl(''); }}
@@ -408,7 +408,7 @@ export default function Home({ user }: { user: User }) {
 
             {videoUrl && (
               <div className="mb-3 relative inline-block">
-                <video src={videoUrl} controls className="max-h-48 rounded-xl bg-black" />
+                <video src={videoUrl || undefined} controls className="max-h-48 rounded-xl bg-black" />
                 <button 
                   type="button" 
                   onClick={() => setVideoUrl(null)}
@@ -463,7 +463,7 @@ export default function Home({ user }: { user: User }) {
                 <div className="p-2 bg-emerald-100 text-emerald-600 rounded-full">
                   <Mic className="w-4 h-4" />
                 </div>
-                <audio src={audioUrl} controls className="h-8 flex-1" />
+                <audio src={audioUrl || undefined} controls className="h-8 flex-1" />
                 <button
                   type="button"
                   onClick={cancelAudio}

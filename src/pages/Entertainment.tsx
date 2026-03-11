@@ -170,7 +170,7 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
         if (data.minRange !== undefined) setMinRange(data.minRange);
         if (data.maxRange !== undefined) setMaxRange(data.maxRange);
         
-        const myNumber = data.customNumbers?.[user.id] ?? data.userNumbers?.[user.id] ?? data.currentNumber;
+        const myNumber = user.role === 'admin' ? null : (data.customNumbers?.[user.id] ?? data.userNumbers?.[user.id] ?? data.currentNumber);
 
         // Trigger animation if isGenerating is true AND lastUpdated is newer than our last animation
         if (data.isGenerating && data.lastUpdated && data.lastUpdated > lastAnimatedAt) {
@@ -199,7 +199,10 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
 
   useEffect(() => {
     if (isAdminOrMod && showAllAccounts) {
-      getAllUsers().then(setUsers).catch(console.error);
+      getAllUsers().then(allUsers => {
+        // Filter out admins from the list
+        setUsers(allUsers.filter(u => u.role !== 'admin'));
+      }).catch(console.error);
     }
   }, [isAdminOrMod, showAllAccounts]);
 
@@ -225,8 +228,8 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
     const max = numberState?.maxRange || 100;
     const range = max - min + 1;
     
-    // Get all users to assign unique random numbers
-    const allUsers = await getAllUsers();
+    // Get all users to assign unique random numbers (excluding admins)
+    const allUsers = (await getAllUsers()).filter(u => u.role !== 'admin');
     const newUserNumbers: Record<string, number> = {};
     
     // Create a shuffled array of numbers in the range
@@ -269,7 +272,7 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
   const handleSendToSpin = async () => {
     if (!numberState) return;
     
-    const allUsers = await getAllUsers();
+    const allUsers = (await getAllUsers()).filter(u => u.role !== 'admin');
     const newItems: {id: string, text: string, color: string}[] = [];
     
     allUsers.forEach((u, index) => {
@@ -441,7 +444,7 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
                 {users.map(u => (
                   <div key={u.id} className="flex items-center justify-between gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
-                      <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full shrink-0" />
+                      <img src={u.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={u.name} className="w-8 h-8 rounded-full shrink-0" />
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-900 truncate">{u.name}</p>
                         <p className="text-[10px] text-slate-500 truncate">@{u.username}</p>

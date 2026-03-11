@@ -161,7 +161,7 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {branding.logo && (
           <div className="flex justify-center mb-4">
-            <img src={branding.logo} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src={branding.logo || undefined} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
           </div>
         )}
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">

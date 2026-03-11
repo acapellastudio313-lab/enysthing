@@ -35,11 +35,11 @@ export default function LeaderboardContent({ candidates }: LeaderboardContentPro
               const percentage = totalVotes > 0 ? ((candidate.vote_count || 0) / totalVotes) * 100 : 0;
               return (
                 <tr key={candidate.id} className={clsx(
-                  "hover:bg-slate-50/50 transition-colors",
+                  "hover:bg-slate-50/50 transition-colors group",
                   index === 0 ? "bg-amber-50/30" : ""
                 )}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 md:blur-md md:group-hover:blur-0 transition-all duration-500">
                       <div className={clsx(
                         "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
                         index === 0 ? "bg-amber-500 text-white shadow-lg shadow-amber-200" :
@@ -52,15 +52,15 @@ export default function LeaderboardContent({ candidates }: LeaderboardContentPro
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <img className="h-10 w-10 rounded-xl object-cover ring-2 ring-white shadow-sm" src={candidate.avatar} alt={candidate.name} referrerPolicy="no-referrer" />
+                    <div className="flex items-center md:blur-md md:group-hover:blur-0 transition-all duration-500">
+                      <img className="h-10 w-10 rounded-xl object-cover ring-2 ring-white shadow-sm" src={candidate.avatar || 'https://picsum.photos/seed/avatar/48/48'} alt={candidate.name} referrerPolicy="no-referrer" />
                       <div className="ml-4">
                         <div className="text-sm font-bold text-slate-900">{candidate.name}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="w-full max-w-[120px]">
+                    <div className="w-full max-w-[120px] md:blur-md md:group-hover:blur-0 transition-all duration-500">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-bold text-slate-500">{percentage.toFixed(1)}%</span>
                       </div>
@@ -76,8 +76,10 @@ export default function LeaderboardContent({ candidates }: LeaderboardContentPro
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className="text-sm font-bold text-slate-900">{candidate.vote_count || 0}</span>
-                    <span className="text-xs text-slate-400 ml-1">Suara</span>
+                    <div className="md:blur-md md:group-hover:blur-0 transition-all duration-500">
+                      <span className="text-sm font-bold text-slate-900">{candidate.vote_count || 0}</span>
+                      <span className="text-xs text-slate-400 ml-1">Suara</span>
+                    </div>
                   </td>
                 </tr>
               );
