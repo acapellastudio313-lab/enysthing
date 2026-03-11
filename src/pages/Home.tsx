@@ -195,7 +195,8 @@ export default function Home({ user }: { user: User }) {
     try {
       let finalAudioUrl = null;
       if (audioBlob) {
-        finalAudioUrl = await uploadFile(audioBlob as File);
+        const file = new File([audioBlob], `audio_${Date.now()}.webm`, { type: audioBlob.type || 'audio/webm' });
+        finalAudioUrl = await uploadFile(file);
       }
 
       let finalVideoUrl = videoUrl;
@@ -219,11 +220,22 @@ export default function Home({ user }: { user: User }) {
         finalImageUrl = `https://picsum.photos/seed/${Math.random()}/800/600`;
       }
 
+      let image_url = null;
+      let image_file_id = null;
+      
+      if (imageUrl && imageUrl.startsWith('data:image')) {
+        image_file_id = finalImageUrl;
+      } else if (imageUrl) {
+        image_url = imageUrl;
+      } else if (showImageInput) {
+        image_url = finalImageUrl; // The picsum URL
+      }
+
       await createPost({ 
         author_id: user.id, 
         content: newPost, 
-        image_url: imageUrl && !imageUrl.startsWith('data:image') ? imageUrl : null,
-        image_file_id: imageUrl && imageUrl.startsWith('data:image') ? finalImageUrl : null,
+        image_url: image_url,
+        image_file_id: image_file_id,
         video_url: videoFile ? null : finalVideoUrl,
         video_file_id: videoFile ? finalVideoUrl : null,
         document_url: documentFile ? null : finalDocumentUrl,
@@ -380,7 +392,7 @@ export default function Home({ user }: { user: User }) {
               <div className="mb-3 relative">
                 {imageUrl.startsWith('data:image') ? (
                   <div className="relative inline-block">
-                    <img src={imageUrl || null} alt="Preview" className="max-h-48 rounded-xl object-cover" />
+                    <img src={imageUrl || undefined} alt="Preview" className="max-h-48 rounded-xl object-cover" />
                     <button 
                       type="button" 
                       onClick={() => { setShowImageInput(false); setImageUrl(''); }}

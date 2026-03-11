@@ -147,9 +147,9 @@ export const uploadFileChunks = async (file: File, onProgress?: (progress: numbe
   
   const metadataRef = doc(db, "file_metadata", fileId);
   await setDoc(metadataRef, {
-    name: file.name,
-    type: file.type,
-    size: file.size,
+    name: file.name || 'unnamed_file',
+    type: file.type || 'application/octet-stream',
+    size: file.size || 0,
     total_chunks: totalChunks,
     created_at: serverTimestamp()
   });

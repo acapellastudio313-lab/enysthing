@@ -284,7 +284,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   </span>
                 </div>
               ) : imageSrc ? (
-                <img src={imageSrc || null} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
+                <img src={imageSrc || undefined} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
               ) : !post.is_uploading ? (
                 <div className="text-xs text-red-500 p-4">Gagal memuat gambar</div>
               ) : null}
@@ -302,7 +302,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                 </div>
               ) : videoSrc ? (
                 <video 
-                  src={videoSrc || null} 
+                  src={videoSrc || undefined} 
                   controls 
                   playsInline
                   preload="metadata"
@@ -335,7 +335,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                 </div>
               ) : documentSrc ? (
                 <a 
-                  href={documentSrc || null} 
+                  href={documentSrc || undefined} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
@@ -364,7 +364,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   </span>
                 </div>
               ) : audioSrc ? (
-                <audio src={audioSrc || null} controls className="w-full h-10" />
+                <audio src={audioSrc || undefined} controls className="w-full h-10" />
               ) : !post.is_uploading ? (
                 <div className="text-xs text-red-500 p-1">Gagal memuat audio</div>
               ) : null}
@@ -598,7 +598,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.9, opacity: 0 }}
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    src={imageSrc || null}
+                    src={imageSrc || undefined}
                     alt="Post attachment full size"
                     className="max-w-full max-h-full object-contain rounded-lg shadow-2xl pointer-events-auto"
                   />

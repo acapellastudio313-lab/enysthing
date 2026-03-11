@@ -509,9 +509,21 @@ export default function Stories({ user }: { user: User }) {
       setCameraStream(stream);
       setFacingMode(mode);
       setShowCamera(true);
-    } catch (e) {
-      console.error('Error accessing camera:', e);
-      toast.error('Gagal mengakses kamera. Pastikan Anda telah memberikan izin.');
+    } catch (e: any) {
+      console.error('Error accessing camera with facingMode:', e);
+      // Fallback: try without facingMode
+      try {
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({ 
+          video: true, 
+          audio: true 
+        });
+        setCameraStream(fallbackStream);
+        setFacingMode('user'); // Defaulting to user
+        setShowCamera(true);
+      } catch (fallbackError) {
+        console.error('Error accessing camera fallback:', fallbackError);
+        toast.error('Gagal mengakses kamera. Pastikan perangkat memiliki kamera dan Anda telah memberikan izin.');
+      }
     }
   };
 
