@@ -33,29 +33,67 @@ export async function getFileFromChunks(fileId: string): Promise<string | null> 
       .map(d => d.data())
       .sort((a, b) => a.index - b.index);
       
-    // Combine all chunk data strings
-    const combinedData = sortedChunks.map(c => c.data).join('');
-    
     try {
-      // The most robust way to handle Data URLs, especially large ones, is using fetch
-      if (combinedData.startsWith('data:')) {
-        const response = await fetch(combinedData);
-        const blob = await response.blob();
-        return URL.createObjectURL(blob);
+      // Calculate total size and decode chunks individually
+      let totalLength = 0;
+      const decodedChunks = sortedChunks.map(c => {
+        let base64 = c.data;
+        // Handle potential data URL prefix for backward compatibility
+        if (base64.includes(',')) {
+          base64 = base64.split(',')[1];
+        }
+        // Remove any whitespace
+        base64 = base64.trim().replace(/\s/g, '');
+        
+        // Handle URL-safe base64
+        base64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+        
+        // Strip ALL non-alphabet characters including existing padding
+        // atob is very picky about '=' only being at the end.
+        base64 = base64.replace(/[^A-Za-z0-9+/]/g, '');
+        
+        // Add padding if necessary (base64 length must be multiple of 4)
+        const remainder = base64.length % 4;
+        if (remainder === 2) {
+          base64 += '==';
+        } else if (remainder === 3) {
+          base64 += '=';
+        } else if (remainder === 1) {
+          // This is technically invalid base64, but we'll try to handle it by dropping the last char
+          console.warn(`Chunk for file ${fileId} has invalid length (4n+1). Dropping last character.`);
+          base64 = base64.slice(0, -1);
+        }
+        
+        if (!base64) return new Uint8Array(0);
+
+        try {
+          // Use a more robust decoding approach
+          const binaryString = atob(base64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          totalLength += bytes.length;
+          return bytes;
+        } catch (e) {
+          // Log only the error message to avoid circular structure issues if e is complex
+          console.error(`Failed to decode chunk for file ${fileId} (length: ${base64.length}):`, e instanceof Error ? e.message : String(e));
+          return new Uint8Array(0);
+        }
+      });
+
+      // Combine into a single Uint8Array
+      const combinedArray = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of decodedChunks) {
+        combinedArray.set(chunk, offset);
+        offset += chunk.length;
       }
       
-      // Fallback for raw base64 strings
-      const actualData = combinedData.replace(/\s/g, '');
-      const binaryString = atob(actualData);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      const fileBlob = new Blob([bytes], { type: type || 'application/octet-stream' });
+      const fileBlob = new Blob([combinedArray], { type: type || 'application/octet-stream' });
       return URL.createObjectURL(fileBlob);
     } catch (err) {
-      console.error(`Critical error in getFileFromChunks for file ${fileId}:`, err);
+      console.error(`Error decoding base64 in getFileFromChunks for file ${fileId}:`, err);
       return null;
     }
   } catch (err) {
@@ -136,34 +174,40 @@ const CHUNK_SIZE = 400 * 1024; // 400KB chunks to be safe (Firestore limit is 1M
 export const uploadFileChunks = async (file: File, onProgress?: (progress: number) => void): Promise<string> => {
   const fileId = doc(collection(db, "file_metadata")).id;
   
-  const base64Data = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-
-  const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
+  const totalSize = file.size;
+  const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
   
   const metadataRef = doc(db, "file_metadata", fileId);
   await setDoc(metadataRef, {
     name: file.name || 'unnamed_file',
     type: file.type || 'application/octet-stream',
-    size: file.size || 0,
+    size: totalSize,
     total_chunks: totalChunks,
     created_at: serverTimestamp()
   });
 
   const uploadChunk = async (i: number) => {
     const start = i * CHUNK_SIZE;
-    const end = Math.min(start + CHUNK_SIZE, base64Data.length);
-    const chunk = base64Data.slice(start, end);
+    const end = Math.min(start + CHUNK_SIZE, totalSize);
+    const blob = file.slice(start, end);
+    
+    const base64Chunk = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data URL prefix (e.g., "data:application/octet-stream;base64,")
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
     
     const chunkRef = doc(db, "file_chunks", `${fileId}_${i}`);
     await setDoc(chunkRef, {
       file_id: fileId,
       index: i,
-      data: chunk
+      data: base64Chunk
     });
     
     if (onProgress) {
@@ -171,7 +215,7 @@ export const uploadFileChunks = async (file: File, onProgress?: (progress: numbe
     }
   };
 
-  // Upload in small batches of 3 to speed up but stay within limits
+  // Upload in small batches
   const batchSize = 3;
   for (let i = 0; i < totalChunks; i += batchSize) {
     const batch = [];
@@ -229,7 +273,24 @@ export const uploadBase64ToStorage = async (base64String: string, path: string):
     }
 
     // Fallback for raw base64
-    const actualData = base64String.replace(/\s/g, '');
+    let actualData = base64String.replace(/\s/g, '');
+    
+    // Handle URL-safe base64
+    actualData = actualData.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Strip ALL non-alphabet characters including existing padding
+    actualData = actualData.replace(/[^A-Za-z0-9+/]/g, '');
+    
+    // Add padding if necessary
+    const remainder = actualData.length % 4;
+    if (remainder === 2) {
+      actualData += '==';
+    } else if (remainder === 3) {
+      actualData += '=';
+    } else if (remainder === 1) {
+      actualData = actualData.slice(0, -1);
+    }
+
     const binaryString = atob(actualData);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {

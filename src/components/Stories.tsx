@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatDateWIB, compressImage } from '../utils';
 import { clsx } from 'clsx';
 import { toast } from 'sonner';
-import { createStory, listenToStories, deleteStory, search, viewStory, uploadFile } from '../lib/db';
+import { createStory, listenToStories, deleteStory, search, viewStory, uploadFile, getFileFromChunks } from '../lib/db';
 
 interface StoryGroup {
   user_id: string;
@@ -48,6 +48,29 @@ function StoryViewer({
 
   const [showViewers, setShowViewers] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(currentStory.media_url || null);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+
+  useEffect(() => {
+    const loadMedia = async () => {
+      if (currentStory.media_file_id && !mediaUrl) {
+        setIsLoadingMedia(true);
+        try {
+          const url = await getFileFromChunks(currentStory.media_file_id);
+          if (url) {
+            setMediaUrl(url);
+          }
+        } catch (e) {
+          console.error("Error loading story media:", e);
+        } finally {
+          setIsLoadingMedia(false);
+        }
+      } else {
+        setMediaUrl(currentStory.media_url || null);
+      }
+    };
+    loadMedia();
+  }, [currentStory.id, currentStory.media_file_id, currentStory.media_url]);
 
   const handleDeleteStory = async () => {
     if (!currentUser || !currentUser.id) {
@@ -235,30 +258,37 @@ function StoryViewer({
             transition={{ duration: 0.2 }}
             className="w-full h-full flex items-center justify-center relative"
           >
-            <TransformWrapper>
-              <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
-                {currentStory.media_type === 'video' ? (
-                  <video 
-                    ref={videoRef}
-                    src={currentStory.media_url || undefined} 
-                    autoPlay 
-                    playsInline
-                    muted={false}
-                    onEnded={handleNext}
-                    onTimeUpdate={handleVideoTimeUpdate}
-                    className="w-full h-full object-contain" 
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-slate-900">
-                    <img 
-                      src={currentStory.media_url || undefined} 
-                      alt="Story" 
+            {isLoadingMedia ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-white text-sm font-medium">Memuat media...</p>
+              </div>
+            ) : (
+              <TransformWrapper>
+                <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full">
+                  {currentStory.media_type === 'video' ? (
+                    <video 
+                      ref={videoRef}
+                      src={mediaUrl || undefined} 
+                      autoPlay 
+                      playsInline
+                      muted={false}
+                      onEnded={handleNext}
+                      onTimeUpdate={handleVideoTimeUpdate}
                       className="w-full h-full object-contain" 
                     />
-                  </div>
-                )}
-              </TransformComponent>
-            </TransformWrapper>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                      <img 
+                        src={mediaUrl || undefined} 
+                        alt="Story" 
+                        className="w-full h-full object-contain" 
+                      />
+                    </div>
+                  )}
+                </TransformComponent>
+              </TransformWrapper>
+            )}
 
             {/* Text Overlays */}
             {currentStory.text_overlays?.map((overlay, idx) => (
@@ -362,6 +392,7 @@ export default function Stories({ user }: { user: User }) {
   const [showUpload, setShowUpload] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadMedia, setUploadMedia] = useState<{ url: string, type: 'image' | 'video', file?: File } | null>(null);
   
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
@@ -443,6 +474,11 @@ export default function Stories({ user }: { user: User }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Revoke previous URL if it was a blob URL
+    if (uploadMedia?.url && uploadMedia.url.startsWith('blob:')) {
+      URL.revokeObjectURL(uploadMedia.url);
+    }
+
     // Reset input value to allow selecting same file again
     e.target.value = '';
 
@@ -457,15 +493,13 @@ export default function Stories({ user }: { user: User }) {
         const response = await fetch(result);
         const blob = await response.blob();
         uploadFileObj = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: 'image/jpeg' });
-      } else {
-        // Read video as data URL
-        const reader = new FileReader();
-        result = await new Promise((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+      } else if (file.type.startsWith('video/')) {
+        // Use object URL for video preview (more efficient than data URL)
+        result = URL.createObjectURL(file);
         uploadFileObj = file;
+      } else {
+        toast.error('Format file tidak didukung. Harap unggah gambar atau video.');
+        return;
       }
       
       setUploadMedia({
@@ -566,7 +600,15 @@ export default function Stories({ user }: { user: User }) {
 
   const startRecording = () => {
     if (cameraStream) {
-      const mediaRecorder = new MediaRecorder(cameraStream);
+      const mimeTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+      ];
+      const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+      
+      const mediaRecorder = new MediaRecorder(cameraStream, mimeType ? { mimeType } : {});
       mediaRecorderRef.current = mediaRecorder;
       const chunks: BlobPart[] = [];
 
@@ -575,10 +617,11 @@ export default function Stories({ user }: { user: User }) {
       };
 
       mediaRecorder.onstop = () => {
-        const mimeType = mediaRecorder.mimeType || 'video/webm';
+        const mimeType = mediaRecorder.mimeType || 'video/mp4';
         const blob = new Blob(chunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
-        const file = new File([blob], `story_${Date.now()}.webm`, { type: mimeType });
+        const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const file = new File([blob], `story_${Date.now()}.${extension}`, { type: mimeType });
         setUploadMedia({ url, type: 'video', file });
         stopCamera();
         setShowUpload(true);
@@ -596,6 +639,13 @@ export default function Stories({ user }: { user: User }) {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (uploadMedia?.url && uploadMedia.url.startsWith('blob:')) {
+        URL.revokeObjectURL(uploadMedia.url);
+      }
+    };
+  }, [uploadMedia]);
   const handlePressStart = () => {
     isLongPress.current = false;
     pressTimer.current = setTimeout(() => {
@@ -647,7 +697,9 @@ export default function Stories({ user }: { user: User }) {
       let mediaFileId = null;
 
       if (uploadMedia.file) {
-        mediaFileId = await uploadFile(uploadMedia.file);
+        mediaFileId = await uploadFile(uploadMedia.file, (progress) => {
+          setUploadProgress(progress);
+        });
         mediaUrl = ''; // We'll use getFileFromChunks later
       }
 
@@ -662,6 +714,7 @@ export default function Stories({ user }: { user: User }) {
       
       setShowUpload(false);
       setUploadMedia(null);
+      setUploadProgress(0);
       setTextOverlay(null);
       setTaggedUsers([]);
       setTempText('');
@@ -899,7 +952,7 @@ export default function Stories({ user }: { user: User }) {
                   className="px-6 py-2 bg-emerald-500 text-white font-bold rounded-full hover:bg-emerald-600 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
-                  {isUploading ? 'Mengunggah...' : 'Upload Story'}
+                  {isUploading ? `Mengunggah ${uploadProgress}%...` : 'Upload Story'}
                 </button>
               </div>
             </div>

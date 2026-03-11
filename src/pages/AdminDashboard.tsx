@@ -1509,7 +1509,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <img src={post.image_url || null} alt="Post attachment" className="rounded-lg max-h-48 object-cover mb-2" />
                   )}
                   {post.video_url && (
-                    <video src={post.video_url || null} controls className="rounded-lg max-h-48 object-cover mb-2 w-full" />
+                    <video src={post.video_url || undefined} controls preload="auto" className="rounded-lg max-h-48 object-cover mb-2 w-full" />
                   )}
                   {post.document_url && (
                     <a href={post.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors mb-2">

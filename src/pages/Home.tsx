@@ -424,7 +424,7 @@ export default function Home({ user }: { user: User }) {
 
             {videoUrl && (
               <div className="mb-3 relative inline-block">
-                <video src={videoUrl || undefined} controls className="max-h-48 rounded-xl bg-black" />
+                <video src={videoUrl || undefined} controls preload="auto" className="max-h-48 rounded-xl bg-black" />
                 <button 
                   type="button" 
                   onClick={() => setVideoUrl(null)}

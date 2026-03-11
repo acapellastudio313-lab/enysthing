@@ -377,7 +377,7 @@ export default function Messages({ user }: { user: User }) {
                                 {loadingMedia[msg.id] ? (
                                   <Loader2 className="w-6 h-6 animate-spin" />
                                 ) : (
-                                  <video src={msg.attachment_url || messageMedia[msg.id] || undefined} controls className="max-w-full rounded-lg" />
+                                  <video src={msg.attachment_url || messageMedia[msg.id] || undefined} controls preload="auto" className="max-w-full rounded-lg" />
                                 )}
                               </div>
                             )}

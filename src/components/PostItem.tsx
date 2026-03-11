@@ -305,12 +305,12 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
                   src={videoSrc || undefined} 
                   controls 
                   playsInline
-                  preload="metadata"
+                  preload="auto"
                   className="w-full h-auto max-h-[500px]" 
-                  onError={(e) => {
-                    console.error("Video playback error", e);
+                  onError={() => {
                     // Only show error if not uploading
                     if (!post.is_uploading) {
+                      console.error("Video playback error for post:", post.id);
                       toast.error("Gagal memutar video. Format mungkin tidak didukung.");
                     }
                   }}
