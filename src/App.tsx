@@ -60,17 +60,33 @@ function GlobalNotification() {
 
 function NotificationHandler({ user }: { user: User }) {
   const navigate = useNavigate();
+  const [lastNotifId, setLastNotifId] = useState<string | null>(localStorage.getItem(`lastNotif_${user.id}`));
 
   useEffect(() => {
     if (!user) return;
 
     const unsubscribe = listenToNotifications(user.id.toString(), (notifications) => {
-       // In a real app, we'd compare with previous notifications to only show toasts for new ones.
-       // For now, we'll just rely on the UI components to show notifications.
+      if (notifications.length > 0) {
+        const latest = notifications[0];
+        if (latest.id !== lastNotifId) {
+          // Show toast for new notification
+          toast(latest.message, {
+            description: latest.type === 'system' ? 'Notifikasi Sistem' : 'Pemberitahuan Baru',
+            action: latest.link ? {
+              label: 'Lihat',
+              onClick: () => navigate(latest.link!)
+            } : undefined,
+            icon: <Megaphone className="w-4 h-4 text-emerald-500" />,
+            duration: 5000,
+          });
+          setLastNotifId(latest.id);
+          localStorage.setItem(`lastNotif_${user.id}`, latest.id);
+        }
+      }
     });
 
     return () => unsubscribe();
-  }, [user, navigate]);
+  }, [user, navigate, lastNotifId]);
 
   return null;
 }
@@ -116,7 +132,7 @@ function SeoUpdater() {
   return null;
 }
 
-// Force Vercel Sync 2026-03-08
+// Force Vercel Sync 2026-03-11
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);

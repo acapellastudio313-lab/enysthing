@@ -97,6 +97,17 @@ export const initAdmin = async () => {
   }
 };
 
+export const addVisitor = async (data: any) => {
+  try {
+    await addDoc(collection(db, "visitors"), {
+      ...data,
+      timestamp: serverTimestamp()
+    });
+  } catch (err) {
+    console.error("Failed to add visitor", err);
+  }
+};
+
 // Settings
 export const getSettings = async () => {
   const querySnapshot = await getDocs(collection(db, "settings"));
@@ -860,11 +871,12 @@ export const resetAllData = async () => {
 };
 
 export const sendSystemNotification = async (message: string) => {
-  await addDoc(collection(db, "notifications"), {
+  await notifyAllUsers({
     type: 'system',
     message,
-    is_read: 0,
-    created_at: serverTimestamp(),
+    actor_name: 'Sistem',
+    actor_avatar: 'https://ui-avatars.com/api/?name=Sistem&background=10b981&color=fff',
+    link: '/'
   });
 };
 

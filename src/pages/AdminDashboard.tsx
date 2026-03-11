@@ -78,7 +78,7 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [updatingSeo, setUpdatingSeo] = useState(false);
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1, password: '' });
+  const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', role: 'pengunjung', is_verified: 0, is_approved: 1, password: '' });
   
   const [votersModal, setVotersModal] = useState<{ isOpen: boolean, candidateName: string, voters: User[] }>({
     isOpen: false,
@@ -102,7 +102,7 @@ export default function AdminDashboard({ user }: { user: User }) {
   };
 
   const [isAddingUser, setIsAddingUser] = useState(false);
-  const [addUserForm, setAddUserForm] = useState({ name: '', username: '', password: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1 });
+  const [addUserForm, setAddUserForm] = useState({ name: '', username: '', password: '', bio: '', role: 'pengunjung', is_verified: 0, is_approved: 1 });
 
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null | 'new'>(null);
   const [candidateForm, setCandidateForm] = useState({ name: '', username: '', avatar: '', vision: '', mission: '', innovation_program: '', image_url: '' });
@@ -608,7 +608,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       const newUser = await createUser(addUserForm);
       setUsers([newUser as User, ...users]);
       setIsAddingUser(false);
-      setAddUserForm({ name: '', username: '', password: '', bio: '', role: 'voter', is_verified: 0, is_approved: 1 });
+      setAddUserForm({ name: '', username: '', password: '', bio: '', role: 'pengunjung', is_verified: 0, is_approved: 1 });
       const s = await getStats();
       setStats(s);
       toast.success('Pengguna baru berhasil ditambahkan');
@@ -1128,22 +1128,38 @@ export default function AdminDashboard({ user }: { user: User }) {
               Kirim Notifikasi Sistem
             </h3>
             <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Tulis notifikasi untuk semua pengguna..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const target = e.target as HTMLInputElement;
-                    if (target.value.trim()) {
-                      sendSystemNotification(target.value.trim());
-                      toast.success('Notifikasi dikirim');
-                      target.value = '';
+              <div className="flex gap-2">
+                <input
+                  id="system-notif-input"
+                  type="text"
+                  placeholder="Tulis notifikasi untuk semua pengguna..."
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const target = e.target as HTMLInputElement;
+                      if (target.value.trim()) {
+                        sendSystemNotification(target.value.trim());
+                        toast.success('Notifikasi dikirim');
+                        target.value = '';
+                      }
                     }
-                  }
-                }}
-              />
-              <p className="text-xs text-slate-500">Tekan Enter untuk mengirim notifikasi ke semua pengguna.</p>
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById('system-notif-input') as HTMLInputElement;
+                    if (input && input.value.trim()) {
+                      sendSystemNotification(input.value.trim());
+                      toast.success('Notifikasi dikirim');
+                      input.value = '';
+                    }
+                  }}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+                >
+                  Kirim
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">Notifikasi akan muncul di icon lonceng dan sebagai pemberitahuan (toast) bagi semua pengguna.</p>
             </div>
           </div>
 
@@ -1421,9 +1437,15 @@ export default function AdminDashboard({ user }: { user: User }) {
                       <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
                         u.role === 'admin' ? 'bg-slate-100 text-slate-700' :
                         u.role === 'candidate' ? 'bg-purple-100 text-purple-700' :
+                        u.role === 'moderator' ? 'bg-blue-100 text-blue-700' :
+                        u.role === 'pengunjung' ? 'bg-orange-100 text-orange-700' :
                         'bg-emerald-100 text-emerald-700'
                       }`}>
-                        {u.role === 'admin' ? 'Admin' : u.role === 'candidate' ? 'Kandidat' : 'Voter'}
+                        {u.role === 'admin' ? 'Admin' : 
+                         u.role === 'candidate' ? 'Kandidat' : 
+                         u.role === 'moderator' ? 'Moderator' :
+                         u.role === 'pengunjung' ? 'Pengunjung' :
+                         'Voter'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">{u.ip_address || '-'}</td>
