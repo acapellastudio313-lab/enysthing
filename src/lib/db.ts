@@ -598,7 +598,10 @@ export const notifyAdmins = async (notificationData: any) => {
 };
 
 export const updatePost = async (postId: string, data: any) => {
-  await updateDoc(doc(db, "posts", postId), data);
+  await updateDoc(doc(db, "posts", postId), {
+    ...data,
+    updated_at: serverTimestamp(),
+  });
 };
 
 export const deletePost = async (postId: string) => {
@@ -606,6 +609,7 @@ export const deletePost = async (postId: string) => {
   const postSnap = await getDoc(postRef);
   if (postSnap.exists()) {
     const data = postSnap.data();
+    if (data.image_file_id) await deleteFileChunks(data.image_file_id);
     if (data.video_file_id) await deleteFileChunks(data.video_file_id);
     if (data.document_file_id) await deleteFileChunks(data.document_file_id);
     if (data.audio_file_id) await deleteFileChunks(data.audio_file_id);

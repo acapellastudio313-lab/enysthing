@@ -77,7 +77,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
       const fetchMedia = async () => {
         // Don't try to fetch if it's still marked as uploading (unless we have it locally)
         // This prevents "Gagal memuat" while chunks are still being written
-        if (post.is_uploading && !getLocalMedia(post.video_file_id || post.document_file_id || post.audio_file_id || '')) {
+        if (post.is_uploading && !getLocalMedia(post.image_file_id || post.video_file_id || post.document_file_id || post.audio_file_id || '')) {
           return;
         }
 
@@ -271,12 +271,23 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
           </div>
           <p className="mt-1 text-sm md:text-base text-slate-800 whitespace-pre-wrap break-words">{post.content}</p>
           
-          {imageSrc && (
+          {(imageSrc || post.image_file_id) && (
             <div 
-              className="mt-3 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer"
-              onClick={() => setIsImageModalOpen(true)}
+              className="mt-3 rounded-2xl overflow-hidden border border-slate-200 cursor-pointer relative min-h-[100px] flex items-center justify-center bg-slate-50"
+              onClick={() => imageSrc && setIsImageModalOpen(true)}
             >
-              <img src={imageSrc || null} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
+              {isLoadingMedia || (post.is_uploading && !imageSrc) ? (
+                <div className="flex flex-col items-center gap-2 p-4">
+                  <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                  <span className="text-xs text-slate-500">
+                    {post.is_uploading ? `Mengunggah gambar... ${post.upload_progress || 0}%` : 'Memuat gambar...'}
+                  </span>
+                </div>
+              ) : imageSrc ? (
+                <img src={imageSrc || null} alt="Post attachment" className="w-full h-auto object-cover hover:opacity-95 transition-opacity" />
+              ) : !post.is_uploading ? (
+                <div className="text-xs text-red-500 p-4">Gagal memuat gambar</div>
+              ) : null}
             </div>
           )}
 

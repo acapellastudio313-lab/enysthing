@@ -40,6 +40,7 @@ export interface Story {
   id: string;
   user_id: string;
   media_url: string;
+  media_file_id?: string;
   media_type: 'image' | 'video';
   created_at: string;
   expires_at: string;

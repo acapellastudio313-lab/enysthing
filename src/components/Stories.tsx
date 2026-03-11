@@ -448,9 +448,15 @@ export default function Stories({ user }: { user: User }) {
 
     try {
       let result: string;
+      let uploadFileObj: File | null = null;
+      
       if (file.type.startsWith('image/') || file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
         // Compress image
         result = await compressImage(file);
+        // Convert data URL back to File for chunked upload
+        const response = await fetch(result);
+        const blob = await response.blob();
+        uploadFileObj = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), { type: 'image/jpeg' });
       } else {
         // Read video as data URL
         const reader = new FileReader();
@@ -459,12 +465,13 @@ export default function Stories({ user }: { user: User }) {
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
+        uploadFileObj = file;
       }
       
       setUploadMedia({
         type: file.type.startsWith('video/') ? 'video' : 'image',
         url: result,
-        file: file
+        file: uploadFileObj
       });
       setShowUpload(true);
       stopCamera();
