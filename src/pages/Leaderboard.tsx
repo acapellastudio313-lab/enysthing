@@ -146,7 +146,7 @@ export default function Leaderboard({ user }: { user: User }) {
               >
                 <div className={clsx(
                   "flex items-center gap-3 md:gap-6 w-full transition-all duration-500",
-                  user.role === 'admin' ? "md:blur-md md:group-hover:blur-0" : ""
+                  (user.role === 'admin' || user.role === 'moderator') ? "md:blur-md md:group-hover:blur-0" : ""
                 )}>
                   <div className="flex flex-col items-center justify-center w-7 md:w-12 shrink-0">
                     {index === 0 ? (
