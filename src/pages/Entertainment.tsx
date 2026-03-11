@@ -59,7 +59,7 @@ export default function Entertainment({ user }: { user: User }) {
     {
       id: 'spin',
       name: 'Putaran Bebas',
-      description: 'Coba keberuntunganmu',
+      description: 'Coba lihat adakah namamu',
       icon: RefreshCw,
       color: 'bg-blue-500',
       path: '/entertainment?tab=spin',
@@ -68,7 +68,7 @@ export default function Entertainment({ user }: { user: User }) {
     {
       id: 'number',
       name: 'Dapatkan Nomor',
-      description: 'Dapatkan nomor keberuntungan',
+      description: 'Coba berapakah nomormu',
       icon: Hash,
       color: 'bg-amber-500',
       path: '/entertainment?tab=number',
