@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Vote, ChevronRight, MessageSquare, User, Settings, Image } from 'lucide-react';
+import { Vote, ChevronRight } from 'lucide-react';
 import { listenToSettings } from '../lib/db';
+import { User } from '../types';
 
-export default function Apps() {
+export default function Apps({ user }: { user: User }) {
   const [electionStatus, setElectionStatus] = useState('not_started');
 
   useEffect(() => {
@@ -22,42 +23,6 @@ export default function Apps() {
       color: 'bg-blue-500',
       path: '/apps/election',
       showBadge: electionStatus === 'in_progress'
-    },
-    {
-      id: 'messages',
-      name: 'Pesan',
-      description: 'Obrolan dengan teman',
-      icon: MessageSquare,
-      color: 'bg-emerald-500',
-      path: '/messages',
-      showBadge: false
-    },
-    {
-      id: 'profile',
-      name: 'Profil',
-      description: 'Kelola profil Anda',
-      icon: User,
-      color: 'bg-indigo-500',
-      path: '/profile',
-      showBadge: false
-    },
-    {
-      id: 'gallery',
-      name: 'Galeri',
-      description: 'Lihat foto Anda',
-      icon: Image,
-      color: 'bg-pink-500',
-      path: '/profile?tab=gallery',
-      showBadge: false
-    },
-    {
-      id: 'settings',
-      name: 'Pengaturan',
-      description: 'Kelola akun Anda',
-      icon: Settings,
-      color: 'bg-slate-500',
-      path: '/settings',
-      showBadge: false
     }
   ];
 
