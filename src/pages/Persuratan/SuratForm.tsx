@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Pimpinan } from '../../types';
-import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon } from 'lucide-react';
+import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool } from 'lucide-react';
+import SignatureModal from '../../components/SignatureModal';
 import { toast } from 'sonner';
 import { GoogleGenAI, Type } from '@google/genai';
 import { db } from '../../lib/firebase';
@@ -15,7 +16,7 @@ let aiClient: GoogleGenAI | null = null;
 // Inisialisasi Gemini di sisi client harus dilakukan dengan hati-hati.
 // Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
 function getAi(): GoogleGenAI | null {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn('GEMINI_API_KEY tidak tersedia. Fitur AI dinonaktifkan.');
     return null;
@@ -55,6 +56,8 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
   const [result, setResult] = useState<any>(initialData || null);
   const [pimpinanList, setPimpinanList] = useState<Pimpinan[]>([]);
   const [selectedPimpinanId, setSelectedPimpinanId] = useState(initialData?.pimpinan_id || '');
+  const [signature, setSignature] = useState<string | null>(initialData?.signature || null);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -219,6 +222,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           type,
           tanggal: result.tanggal,
           file_url: fileUrl,
+          signature: signature,
           updatedAt: serverTimestamp()
         };
         
@@ -239,7 +243,8 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           file_url: fileUrl,
           type,
           updatedAt: serverTimestamp(),
-          buku_nomor_id: bukuId
+          buku_nomor_id: bukuId,
+          signature: signature
         };
 
         if (!initialData) {
@@ -392,24 +397,44 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
                 />
               </div>
               {type === 'keluar' && (
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
-                    <UserIcon className="w-3 h-3" /> Pimpinan Penandatangan
-                  </label>
-                  <select 
-                    value={selectedPimpinanId}
-                    onChange={e => setSelectedPimpinanId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-slate-900 outline-none focus:border-emerald-500 font-bold"
-                  >
-                    <option value="">Pilih Pimpinan...</option>
-                    {pimpinanList.map(p => (
-                      <option key={p.id} value={p.id}>{p.nama} - {p.jabatan}</option>
-                    ))}
-                  </select>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                      <UserIcon className="w-3 h-3" /> Pimpinan Penandatangan
+                    </label>
+                    <select 
+                      value={selectedPimpinanId}
+                      onChange={e => setSelectedPimpinanId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-slate-900 outline-none focus:border-emerald-500 font-bold"
+                    >
+                      <option value="">Pilih Pimpinan...</option>
+                      {pimpinanList.map(p => (
+                        <option key={p.id} value={p.id}>{p.nama} - {p.jabatan}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tanda Tangan</label>
+                    <button 
+                      onClick={() => setShowSignatureModal(true)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-slate-900 outline-none focus:border-emerald-500 flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2 font-bold">
+                        <PenTool className="w-4 h-4" /> {signature ? 'Tanda Tangan Tersimpan' : 'Buat/Unggah Tanda Tangan'}
+                      </span>
+                      {signature && <img src={signature} alt="Signature" className="h-8 object-contain" />}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
+
+          <SignatureModal 
+            isOpen={showSignatureModal} 
+            onClose={() => setShowSignatureModal(false)} 
+            onSave={(sig) => { setSignature(sig); setShowSignatureModal(false); }}
+          />
 
           <button 
             onClick={saveLetter} 
