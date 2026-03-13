@@ -16,6 +16,7 @@ import Login from './pages/Login';
 import Messages from './pages/Messages';
 import AdminDashboard from './pages/AdminDashboard';
 import Entertainment from './pages/Entertainment';
+import Persuratan from './pages/Persuratan/Persuratan';
 import Apps from './pages/Apps';
 import ElectionApp from './pages/ElectionApp';
 import ScrollToTop from './components/ScrollToTop';
@@ -171,6 +172,7 @@ export default function App() {
     collectData();
 
     const storedUserId = localStorage.getItem('userId');
+    console.log("App: storedUserId", storedUserId);
     if (storedUserId === 'admin') {
       setUser({
         id: 'admin',
@@ -188,10 +190,14 @@ export default function App() {
     } else if (storedUserId) {
       getUser(storedUserId)
         .then(found => {
+          console.log("App: Found user", found);
           if (found) setUser(found);
           setLoading(false);
         })
-        .catch(() => setLoading(false));
+        .catch((err) => {
+          console.error("App: Error getting user", err);
+          setLoading(false);
+        });
     } else {
       setLoading(false);
     }
@@ -222,6 +228,7 @@ export default function App() {
           <Route path="/explore" element={<Explore />} />
           <Route path="/entertainment" element={<Entertainment user={user} />} />
           <Route path="/apps" element={<Apps user={user} />} />
+          <Route path="/apps/persuratan" element={<Persuratan user={user} />} />
           <Route path="/apps/election" element={<ElectionApp user={user} />} />
           <Route path="/profile" element={<Profile user={user} onUpdateUser={setUser} />} />
           <Route path="/profile/:userId" element={<Profile user={user} onUpdateUser={setUser} />} />

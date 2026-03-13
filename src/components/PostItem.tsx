@@ -40,6 +40,17 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState('');
@@ -201,13 +212,21 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
       toast.error('User tidak ditemukan');
       return;
     }
-    try {
-      await deleteComment(post.id, commentId);
-      toast.success('Komentar berhasil dihapus');
-    } catch (error: any) {
-      console.error('Delete comment error:', error);
-      toast.error(error.message || 'Terjadi kesalahan saat menghapus komentar');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Komentar',
+      message: 'Apakah Anda yakin ingin menghapus komentar ini?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await deleteComment(post.id, commentId);
+          toast.success('Komentar berhasil dihapus');
+        } catch (error: any) {
+          console.error('Delete comment error:', error);
+          toast.error(error.message || 'Terjadi kesalahan saat menghapus komentar');
+        }
+      }
+    });
   };
 
   const handleEditComment = async (commentId: string, newContent: string) => {
@@ -412,7 +431,7 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
             <button 
               onClick={() => {
                 navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
-                alert('Tautan disalin ke papan klip!');
+                toast.success('Tautan disalin ke papan klip!');
               }}
               className="flex items-center gap-1.5 md:gap-2 text-slate-500 hover:text-blue-600 group transition-colors"
             >
@@ -622,13 +641,47 @@ export default function PostItem({ post, user, onLike, onPin, onPostUpdated, onP
       )}
 
       {isConfirmingDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-800 rounded-2xl p-6 w-full max-w-sm">
-            <h2 className="text-lg font-bold mb-2">Hapus Postingan?</h2>
-            <p className="text-sm text-slate-600 dark:text-neutral-300 mb-6">Tindakan ini tidak dapat diurungkan. Anda yakin ingin menghapus postingan ini?</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setIsConfirmingDelete(false)} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-neutral-700 font-semibold">Batal</button>
-              <button onClick={handleDelete} className="px-4 py-2 rounded-lg bg-red-500 text-white font-semibold">Hapus</button>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Hapus Postingan?</h3>
+            <p className="text-slate-600 mb-6">Tindakan ini tidak dapat diurungkan. Anda yakin ingin menghapus postingan ini?</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsConfirmingDelete(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-600 mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+              >
+                Ya, Lanjutkan
+              </button>
             </div>
           </div>
         </div>

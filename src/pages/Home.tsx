@@ -34,7 +34,9 @@ export default function Home({ user }: { user: User }) {
   const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
+    console.log("Home: Calling listenToPosts");
     const unsubscribePosts = listenToPosts((fetchedPosts) => {
+      console.log("Home: Received posts", fetchedPosts.length);
       // Ensure uniqueness
       const uniquePosts = fetchedPosts.filter((post, index, self) => 
         index === self.findIndex((t) => (
@@ -117,9 +119,9 @@ export default function Home({ user }: { user: User }) {
     } catch (err: any) {
       console.error('Error accessing microphone:', err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        alert('Izin mikrofon ditolak. Silakan aktifkan izin mikrofon di pengaturan browser Anda.');
+        toast.error('Izin mikrofon ditolak. Silakan aktifkan izin mikrofon di pengaturan browser Anda.');
       } else {
-        alert('Tidak dapat mengakses mikrofon: ' + (err.message || 'Kesalahan tidak diketahui'));
+        toast.error('Tidak dapat mengakses mikrofon: ' + (err.message || 'Kesalahan tidak diketahui'));
       }
     }
   };
@@ -216,7 +218,7 @@ export default function Home({ user }: { user: User }) {
       setPostUploadProgress(0);
     } catch (error) {
       console.error('Error creating post:', error);
-      alert('Gagal membuat postingan: ' + (error instanceof Error ? error.message : 'Kesalahan tidak diketahui'));
+      toast.error('Gagal membuat postingan: ' + (error instanceof Error ? error.message : 'Kesalahan tidak diketahui'));
     } finally {
       setIsPosting(false);
     }
@@ -231,7 +233,7 @@ export default function Home({ user }: { user: User }) {
         setShowImageInput(true);
       } catch (error) {
         console.error('Error compressing image:', error);
-        alert('Gagal memproses gambar');
+        toast.error('Gagal memproses gambar');
       }
     }
   };

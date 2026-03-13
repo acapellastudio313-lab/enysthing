@@ -22,13 +22,16 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
   const location = useLocation();
 
   const navItems = [
-    { icon: Home, label: 'Beranda', to: '/' },
-    { icon: Gamepad2, label: 'Hiburan', to: '/entertainment' },
-    { icon: LayoutGrid, label: 'Aplikasi', to: '/apps' },
-    { icon: UserIcon, label: 'Profil', to: '/profile' },
+    { id: 'home', icon: Home, label: 'Beranda', to: '/' },
+    { id: 'entertainment', icon: Gamepad2, label: 'Hiburan', to: '/entertainment' },
+    { id: 'apps', icon: LayoutGrid, label: 'Aplikasi', to: '/apps' },
+    { id: 'profile', icon: UserIcon, label: 'Profil', to: '/profile' },
   ];
 
   const filteredNavItems = navItems.filter(item => {
+    // Check if hidden by admin
+    if (user.hidden_menus?.includes(item.id)) return false;
+
     if (user.role === 'admin') return true;
     if (user.role === 'pengunjung') return ['Beranda', 'Profil'].includes(item.label);
     if (user.role === 'voter') return ['Beranda', 'Hiburan', 'Aplikasi', 'Profil'].includes(item.label);
@@ -38,7 +41,7 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
   });
 
   if (user.role === 'admin') {
-    filteredNavItems.push({ icon: Shield, label: 'Admin Panel', to: '/admin' });
+    filteredNavItems.push({ id: 'admin', icon: Shield, label: 'Admin Panel', to: '/admin' });
   }
 
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -220,33 +223,37 @@ export default function Layout({ children, user, onLogout }: LayoutProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <NavLink 
-              to="/messages" 
-              className={({ isActive }) => 
-                clsx(
-                  "p-2 rounded-full transition-colors relative",
-                  isActive ? "bg-emerald-50 text-emerald-600" : "text-slate-600 hover:bg-slate-100"
-                )
-              }
-            >
-              <MessageSquare className="w-5 h-5" />
-              {unreadMessages > 0 && (
-                <span className="absolute top-1 right-1 bg-emerald-600 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {unreadMessages}
-                </span>
-              )}
-            </NavLink>
-            <NavLink 
-              to="/explore" 
-              className={({ isActive }) => 
-                clsx(
-                  "p-2 rounded-full transition-colors relative",
-                  isActive ? "bg-emerald-50 text-emerald-600" : "text-slate-600 hover:bg-slate-100"
-                )
-              }
-            >
-              <Search className="w-5 h-5" />
-            </NavLink>
+            {!user.hidden_menus?.includes('messages') && (
+              <NavLink 
+                to="/messages" 
+                className={({ isActive }) => 
+                  clsx(
+                    "p-2 rounded-full transition-colors relative",
+                    isActive ? "bg-emerald-50 text-emerald-600" : "text-slate-600 hover:bg-slate-100"
+                  )
+                }
+              >
+                <MessageSquare className="w-5 h-5" />
+                {unreadMessages > 0 && (
+                  <span className="absolute top-1 right-1 bg-emerald-600 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
+                    {unreadMessages}
+                  </span>
+                )}
+              </NavLink>
+            )}
+            {!user.hidden_menus?.includes('explore') && (
+              <NavLink 
+                to="/explore" 
+                className={({ isActive }) => 
+                  clsx(
+                    "p-2 rounded-full transition-colors relative",
+                    isActive ? "bg-emerald-50 text-emerald-600" : "text-slate-600 hover:bg-slate-100"
+                  )
+                }
+              >
+                <Search className="w-5 h-5" />
+              </NavLink>
+            )}
             <NotificationBell user={user} />
             <button onClick={onLogout} className="p-2 text-slate-600 hover:bg-slate-100 rounded-full md:hidden">
               <LogOut className="w-5 h-5" />

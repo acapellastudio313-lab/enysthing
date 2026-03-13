@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') || 
+         (request.auth.token.email == "acapellastudio313@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isModerator() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator') || isAdmin());
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isPetugas() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.persuratan_role == 'petugas') || isAdmin());
+    }
+
+    function isPimpinan() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.persuratan_role == 'pimpinan') || isAdmin());
+    }
+
+    function isPersuratanUser() {
+      return isPetugas() || isPimpinan();
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+      
+      match /notifications/{notifId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAuthenticated(); // Allow system/others to notify
+      }
+    }
+
+    match /surat/{suratId} {
+      allow read: if isPersuratanUser();
+      allow create: if isPetugas();
+      allow update: if isPersuratanUser();
+      allow delete: if isAdmin();
+    }
+
+    match /buku_kendali/{entryId} {
+      allow read: if isPersuratanUser();
+      allow create: if isPetugas();
+      allow update: if isPersuratanUser();
+      allow delete: if isAdmin();
+    }
+
+    match /counters/{counterId} {
+      allow read: if isPersuratanUser();
+      allow write: if isPetugas();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    match /posts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || resource.data.author_id == request.auth.uid;
+
+      match /likes/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+    }
+
+    match /stories/{storyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || resource.data.user_id == request.auth.uid;
+    }
+
+    match /votes/{voteId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+    }
+
+    match /candidates/{candidateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /entertainment/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isModerator();
+
+      match /answers/{answerId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update, delete: if isModerator();
+      }
+    }
+
+    match /file_metadata/{fileId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /file_chunks/{chunkId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /visitors/{visitorId} {
+      allow read: if isAdmin();
+      allow create: if true;
+    }
+  }
+}

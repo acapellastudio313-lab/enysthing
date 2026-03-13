@@ -25,6 +25,18 @@ export default function Messages({ user }: { user: User }) {
   const [showUserList, setShowUserList] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
   const updateSelectedConversation = (conv: Conversation | null) => {
     setSelectedConversation(conv);
     if (conv) {
@@ -132,7 +144,7 @@ export default function Messages({ user }: { user: User }) {
          setAttachment({ url, type, name: file.name, file });
        } catch (e) {
          console.error(e);
-         alert('Gagal memproses gambar');
+         toast.error('Gagal memproses gambar');
        }
     } else {
        const reader = new FileReader();
@@ -178,27 +190,39 @@ export default function Messages({ user }: { user: User }) {
 
   const handleDeleteMessage = async (messageId: string) => {
     if (!selectedConversation) return;
-    if (window.confirm('Hapus pesan ini?')) {
-      try {
-        await deleteMessage(user.id, selectedConversation.id, messageId);
-      } catch (err) {
-        console.error('Failed to delete message', err);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Pesan',
+      message: 'Hapus pesan ini?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await deleteMessage(user.id, selectedConversation.id, messageId);
+        } catch (err) {
+          console.error('Failed to delete message', err);
+        }
       }
-    }
+    });
   };
 
   const handleDeleteConversation = async (e: React.MouseEvent, otherUserId: string) => {
     e.stopPropagation();
-    if (window.confirm('Hapus seluruh percakapan ini?')) {
-      try {
-        await deleteConversation(user.id, otherUserId);
-        if (selectedConversation?.id === otherUserId) {
-          setSelectedConversation(null);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Percakapan',
+      message: 'Hapus seluruh percakapan ini?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await deleteConversation(user.id, otherUserId);
+          if (selectedConversation?.id === otherUserId) {
+            setSelectedConversation(null);
+          }
+        } catch (err) {
+          console.error('Failed to delete conversation', err);
         }
-      } catch (err) {
-        console.error('Failed to delete conversation', err);
       }
-    }
+    });
   };
 
   const scrollToBottom = () => {
@@ -498,6 +522,30 @@ export default function Messages({ user }: { user: User }) {
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-600 mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+              >
+                Ya, Lanjutkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

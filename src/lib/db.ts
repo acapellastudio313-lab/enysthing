@@ -331,8 +331,10 @@ export const createPost = async (postData: any) => {
 };
 
 export const listenToPosts = (callback: (posts: Post[]) => void) => {
+  console.log("listenToPosts called");
   const q = query(collection(db, "posts"), orderBy("created_at", "desc"));
   return onSnapshot(q, async (snapshot) => {
+    console.log("listenToPosts: Received snapshot with", snapshot.docs.length, "docs");
     const posts = await Promise.all(snapshot.docs.map(async (postDoc) => {
       const data = postDoc.data();
       const author = await getUser(data.author_id);
@@ -354,6 +356,8 @@ export const listenToPosts = (callback: (posts: Post[]) => void) => {
     });
     
     callback(posts);
+  }, (error) => {
+    console.error("listenToPosts: Error in onSnapshot", error);
   });
 };
 

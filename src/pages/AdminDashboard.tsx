@@ -32,6 +32,7 @@ import {
   triggerAppRefresh
 } from '../lib/db';
 import { compressImage } from '../utils';
+import MenuManager from '../components/MenuManager';
 
 export default function AdminDashboard({ user }: { user: User }) {
   const [stats, setStats] = useState({ users: 0, posts: 0, votes: 0, candidates: 0 });
@@ -41,9 +42,9 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as 'users' | 'posts' | 'candidates' | 'leaderboard') || 'users';
+  const activeTab = (searchParams.get('tab') as 'users' | 'posts' | 'candidates' | 'leaderboard' | 'menus') || 'users';
 
-  const setActiveTab = (tab: 'users' | 'posts' | 'candidates' | 'leaderboard') => {
+  const setActiveTab = (tab: 'users' | 'posts' | 'candidates' | 'leaderboard' | 'menus') => {
     setSearchParams({ tab });
   };
 
@@ -302,9 +303,21 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const [updatingEndDate, setUpdatingEndDate] = useState(false);
 
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
   const updateElectionEndDate = async () => {
     if (!electionEndDate) {
-      alert('Silakan pilih tanggal dan waktu');
+      toast.error('Silakan pilih tanggal dan waktu');
       return;
     }
 
@@ -322,22 +335,28 @@ export default function AdminDashboard({ user }: { user: User }) {
   };
 
   const resetVotes = async () => {
-    if (!confirm('PERINGATAN: Apakah Anda yakin ingin menghapus SEMUA suara? Tindakan ini tidak dapat dibatalkan.')) return;
-    
-    setResettingVotes(true);
-    setStatusMessage(null);
-    try {
-      await resetVotesDb();
-      setStatusMessage({ type: 'success', text: 'Semua suara berhasil dihapus' });
-      const s = await getStats();
-      setStats(s);
-      const l = await getLeaderboard();
-      setLeaderboard(l);
-    } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Gagal menghapus suara' });
-    } finally {
-      setResettingVotes(false);
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reset Suara',
+      message: 'PERINGATAN: Apakah Anda yakin ingin menghapus SEMUA suara? Tindakan ini tidak dapat dibatalkan.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        setResettingVotes(true);
+        setStatusMessage(null);
+        try {
+          await resetVotesDb();
+          setStatusMessage({ type: 'success', text: 'Semua suara berhasil dihapus' });
+          const s = await getStats();
+          setStats(s);
+          const l = await getLeaderboard();
+          setLeaderboard(l);
+        } catch (err: any) {
+          setStatusMessage({ type: 'error', text: err.message || 'Gagal menghapus suara' });
+        } finally {
+          setResettingVotes(false);
+        }
+      }
+    });
   };
 
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -467,63 +486,83 @@ export default function AdminDashboard({ user }: { user: User }) {
 
   const handleBulkDeleteCandidates = async () => {
     if (selectedCandidateIds.length === 0) return;
-    if (!confirm(`Hapus ${selectedCandidateIds.length} kandidat?`)) return;
-    try {
-      await bulkDeleteCandidates(selectedCandidateIds, candidates);
-      toast.success('Kandidat berhasil dihapus');
-      fetchCandidates();
-      setSelectedCandidateIds([]);
-      
-      // Update other stats
-      const s = await getStats();
-      setStats(s);
-      const u = await getAllUsers();
-      setUsers(u);
-      const l = await getLeaderboard();
-      setLeaderboard(l);
-    } catch (err) {
-      console.error(err);
-      toast.error('Gagal menghapus kandidat');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Kandidat',
+      message: `Hapus ${selectedCandidateIds.length} kandidat?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await bulkDeleteCandidates(selectedCandidateIds, candidates);
+          toast.success('Kandidat berhasil dihapus');
+          fetchCandidates();
+          setSelectedCandidateIds([]);
+          
+          // Update other stats
+          const s = await getStats();
+          setStats(s);
+          const u = await getAllUsers();
+          setUsers(u);
+          const l = await getLeaderboard();
+          setLeaderboard(l);
+        } catch (err) {
+          console.error(err);
+          toast.error('Gagal menghapus kandidat');
+        }
+      }
+    });
   };
 
   const handleBulkUpdateRole = async (role: string) => {
     if (selectedUserIds.length === 0) return;
-    if (!confirm(`Ubah role ${selectedUserIds.length} pengguna menjadi ${role}?`)) return;
-    try {
-      const batch = writeBatch(db);
-      selectedUserIds.forEach(id => {
-        batch.update(doc(db, 'users', id), { role });
-      });
-      await batch.commit();
-      toast.success('Role berhasil diubah');
-      fetchUsers();
-      setSelectedUserIds([]);
-    } catch (err) {
-      console.error(err);
-      toast.error('Gagal mengubah role');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Ubah Role',
+      message: `Ubah role ${selectedUserIds.length} pengguna menjadi ${role}?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const batch = writeBatch(db);
+          selectedUserIds.forEach(id => {
+            batch.update(doc(db, 'users', id), { role });
+          });
+          await batch.commit();
+          toast.success('Role berhasil diubah');
+          fetchUsers();
+          setSelectedUserIds([]);
+        } catch (err) {
+          console.error(err);
+          toast.error('Gagal mengubah role');
+        }
+      }
+    });
   };
 
   const handleApproveAll = async () => {
-    if (!window.confirm('Apakah Anda yakin ingin menyetujui semua pengguna baru?')) return;
-    
-    try {
-      const batch = writeBatch(db);
-      users.forEach(u => {
-        if (u.is_approved === 0) {
-          batch.update(doc(db, 'users', u.id), { is_approved: 1 });
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Setujui Semua Pengguna Baru',
+      message: 'Apakah Anda yakin ingin menyetujui semua pengguna baru?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const batch = writeBatch(db);
+          users.forEach(u => {
+            if (u.is_approved === 0) {
+              batch.update(doc(db, 'users', u.id), { is_approved: 1 });
+            }
+          });
+          await batch.commit();
+          toast.success('Semua pengguna baru telah disetujui');
+          // Refresh users list
+          const updatedUsers = await getAllUsers();
+          setUsers(updatedUsers);
+        } catch (error) {
+          console.error('Error approving all users:', error);
+          toast.error('Gagal menyetujui pengguna');
         }
-      });
-      await batch.commit();
-      toast.success('Semua pengguna baru telah disetujui');
-      // Refresh users list
-      const updatedUsers = await getAllUsers();
-      setUsers(updatedUsers);
-    } catch (error) {
-      console.error('Error approving all users:', error);
-      toast.error('Gagal menyetujui pengguna');
-    }
+      }
+    });
   };
 
   const handleEditUser = (u: User) => {
@@ -601,18 +640,24 @@ export default function AdminDashboard({ user }: { user: User }) {
   };
 
   const handleDeletePost = async (postId: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus postingan ini?')) return;
-
-    try {
-      await deletePost(postId);
-      setPosts(posts.filter(p => p.id !== postId));
-      const s = await getStats();
-      setStats(s);
-      toast.success('Postingan berhasil dihapus');
-    } catch (err) {
-      console.error('Failed to delete post', err);
-      toast.error('Gagal menghapus postingan');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Postingan',
+      message: 'Apakah Anda yakin ingin menghapus postingan ini?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await deletePost(postId);
+          setPosts(posts.filter(p => p.id !== postId));
+          const s = await getStats();
+          setStats(s);
+          toast.success('Postingan berhasil dihapus');
+        } catch (err) {
+          console.error('Failed to delete post', err);
+          toast.error('Gagal menghapus postingan');
+        }
+      }
+    });
   };
 
   const handleDeleteCandidate = async (candidateId: string) => {
@@ -678,7 +723,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       
       if (isNew) {
         if (selectedUserIds.length === 0) {
-          alert('Silakan pilih minimal satu pengguna');
+          toast.error('Silakan pilih minimal satu pengguna');
           return;
         }
         
@@ -702,7 +747,7 @@ export default function AdminDashboard({ user }: { user: User }) {
       }
     } catch (err) {
       console.error('Failed to save candidate', err);
-      alert('Terjadi kesalahan saat menyimpan kandidat');
+      toast.error('Terjadi kesalahan saat menyimpan kandidat');
     }
   };
 
@@ -1309,6 +1354,17 @@ export default function AdminDashboard({ user }: { user: User }) {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('menus')}
+          className={`px-4 py-2 font-medium text-sm transition-colors relative whitespace-nowrap ${
+            activeTab === 'menus' ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          Kelola Menu
+          {activeTab === 'menus' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-t-full" />
+          )}
+        </button>
       </div>
 
       {/* Content */}
@@ -1322,11 +1378,18 @@ export default function AdminDashboard({ user }: { user: User }) {
                   <>
                     <button 
                       onClick={async () => {
-                        if (!confirm(`Setujui ${selectedUserIds.length} pengguna?`)) return;
-                        await bulkApproveUsers(selectedUserIds);
-                        toast.success('Pengguna berhasil disetujui');
-                        fetchUsers();
-                        setSelectedUserIds([]);
+                        setConfirmDialog({
+                          isOpen: true,
+                          title: 'Setujui Pengguna',
+                          message: `Setujui ${selectedUserIds.length} pengguna?`,
+                          onConfirm: async () => {
+                            setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                            await bulkApproveUsers(selectedUserIds);
+                            toast.success('Pengguna berhasil disetujui');
+                            fetchUsers();
+                            setSelectedUserIds([]);
+                          }
+                        });
                       }}
                       className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm flex items-center gap-2"
                     >
@@ -1334,16 +1397,23 @@ export default function AdminDashboard({ user }: { user: User }) {
                     </button>
                     <button 
                       onClick={async () => {
-                        if (!confirm(`Hapus ${selectedUserIds.length} pengguna?`)) return;
-                        await bulkDeleteUsers(selectedUserIds);
-                        toast.success('Pengguna berhasil dihapus');
-                        fetchUsers();
-                        fetchCandidates();
-                        const l = await getLeaderboard();
-                        setLeaderboard(l);
-                        const s = await getStats();
-                        setStats(s);
-                        setSelectedUserIds([]);
+                        setConfirmDialog({
+                          isOpen: true,
+                          title: 'Hapus Pengguna',
+                          message: `Hapus ${selectedUserIds.length} pengguna?`,
+                          onConfirm: async () => {
+                            setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                            await bulkDeleteUsers(selectedUserIds);
+                            toast.success('Pengguna berhasil dihapus');
+                            fetchUsers();
+                            fetchCandidates();
+                            const l = await getLeaderboard();
+                            setLeaderboard(l);
+                            const s = await getStats();
+                            setStats(s);
+                            setSelectedUserIds([]);
+                          }
+                        });
                       }}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
                     >
@@ -1373,9 +1443,16 @@ export default function AdminDashboard({ user }: { user: User }) {
                 </button>
                 <button
                   onClick={async () => {
-                    if (!confirm('Apakah Anda yakin ingin memuat ulang aplikasi untuk semua pengguna?')) return;
-                    await triggerAppRefresh();
-                    toast.success('Perintah muat ulang dikirim');
+                    setConfirmDialog({
+                      isOpen: true,
+                      title: 'Refresh Aplikasi',
+                      message: 'Apakah Anda yakin ingin memuat ulang aplikasi untuk semua pengguna?',
+                      onConfirm: async () => {
+                        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                        await triggerAppRefresh();
+                        toast.success('Perintah muat ulang dikirim');
+                      }
+                    });
                   }}
                   className="px-4 py-2 bg-slate-800 text-white rounded-xl font-medium hover:bg-slate-900 transition-colors text-sm flex items-center gap-2"
                 >
@@ -1620,7 +1697,7 @@ export default function AdminDashboard({ user }: { user: User }) {
               <div className="p-8 text-center text-slate-500">Belum ada kandidat terdaftar.</div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'leaderboard' ? (
           <div className="p-4">
             <div className="bg-slate-50 rounded-xl p-6 border border-slate-100">
               <div className="flex items-center justify-between mb-6">
@@ -1683,7 +1760,11 @@ export default function AdminDashboard({ user }: { user: User }) {
               </div>
             </div>
           </div>
-        )}
+        ) : activeTab === 'menus' ? (
+          <div className="p-4">
+            <MenuManager users={users} onUsersUpdated={fetchUsers} />
+          </div>
+        ) : null}
       </div>
       {/* Add User Modal */}
       {isAddingUser && (
@@ -2224,6 +2305,29 @@ export default function AdminDashboard({ user }: { user: User }) {
                   Belum ada pemilih untuk kandidat ini.
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Confirmation Modal */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-600 mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+              >
+                Ya, Lanjutkan
+              </button>
             </div>
           </div>
         </div>

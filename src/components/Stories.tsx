@@ -442,6 +442,17 @@ export default function Stories({ user }: { user: User }) {
   const [isTagging, setIsTagging] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
   const [tagSuggestions, setTagSuggestions] = useState<User[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -488,19 +499,24 @@ export default function Stories({ user }: { user: User }) {
   }, []);
 
   const handleDeleteAllStories = async (userId: string) => {
-    const confirmDelete = window.confirm('Hapus semua cerita Anda?');
-    if (!confirmDelete) return;
-
-    try {
-      const userStories = stories.filter(s => s.user_id === userId);
-      for (const story of userStories) {
-        await deleteStory(story.id);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Semua Cerita',
+      message: 'Hapus semua cerita Anda?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const userStories = stories.filter(s => s.user_id === userId);
+          for (const story of userStories) {
+            await deleteStory(story.id);
+          }
+          toast.success('Semua cerita berhasil dihapus');
+        } catch (error) {
+          console.error('Error deleting stories:', error);
+          toast.error('Gagal menghapus cerita');
+        }
       }
-      toast.success('Semua cerita berhasil dihapus');
-    } catch (error) {
-      console.error('Error deleting stories:', error);
-      toast.error('Gagal menghapus cerita');
-    }
+    });
   };
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -754,7 +770,7 @@ export default function Stories({ user }: { user: User }) {
       setIsEditingText(false);
     } catch (e) {
       console.error(e);
-      alert('Gagal mengunggah cerita. Silakan coba lagi.');
+      toast.error('Gagal mengunggah cerita. Silakan coba lagi.');
     } finally {
       setIsUploading(false);
     }
@@ -1117,6 +1133,29 @@ export default function Stories({ user }: { user: User }) {
           />
         )}
       </AnimatePresence>
+      {/* Confirmation Modal */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-600 mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+              >
+                Ya, Lanjutkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "candidate", "voter", "moderator", "pengunjung"] },
+        "persuratan_role": { "type": "string", "enum": ["petugas", "pimpinan"] },
+        "is_approved": { "type": "integer" },
+        "is_verified": { "type": "integer" }
+      },
+      "required": ["username", "name", "role"]
+    },
+    "Surat": {
+      "title": "Surat",
+      "description": "Incoming and outgoing mail records",
+      "type": "object",
+      "properties": {
+        "nomor": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "pengirim": { "type": "string" },
+        "tujuan": { "type": "string" },
+        "perihal": { "type": "string" },
+        "klasifikasi": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "type": { "type": "string", "enum": ["masuk", "keluar"] },
+        "authorName": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nomor", "type", "status", "createdBy"]
+    },
+    "BukuKendali": {
+      "title": "Buku Kendali",
+      "description": "Official mail numbering log",
+      "type": "object",
+      "properties": {
+        "nomor_urut": { "type": "integer" },
+        "nomor_full": { "type": "string" },
+        "kode_klasifikasi": { "type": "string" },
+        "perihal": { "type": "string" },
+        "tujuan": { "type": "string" },
+        "petugas": { "type": "string" },
+        "pimpinan": { "type": "string" },
+        "pimpinan_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Digunakan", "Arsip"] },
+        "type": { "type": "string", "enum": ["masuk", "keluar"] },
+        "tanggal": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nomor_full", "nomor_urut", "type", "tanggal"]
+    },
+    "Pimpinan": {
+      "title": "Pimpinan",
+      "description": "Leadership list for signing mail",
+      "type": "object",
+      "properties": {
+        "nama": { "type": "string" },
+        "jabatan": { "type": "string" },
+        "nip": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nama", "jabatan"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/surat/{suratId}": {
+      "schema": "Surat",
+      "description": "Mail records"
+    },
+    "/buku_kendali/{entryId}": {
+      "schema": "BukuKendali",
+      "description": "Mail numbering log"
+    },
+    "/pimpinan/{pimpinanId}": {
+      "schema": "Pimpinan",
+      "description": "Leadership list"
+    },
+    "/counters/{counterId}": {
+      "schema": "object",
+      "description": "Atomic counters for numbering"
+    },
+    "/notifications/{notifId}": {
+      "schema": "object",
+      "description": "User notifications"
+    },
+    "/settings/{settingId}": {
+      "schema": "object",
+      "description": "App settings"
+    }
+  }
+}

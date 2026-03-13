@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Post } from '../types';
 import { formatDateWIB } from '../utils';
 import { MessageSquare, ThumbsUp, Trash2, Clock, User, FileText } from 'lucide-react';
@@ -9,17 +10,34 @@ interface PostsContentProps {
 }
 
 export default function PostsContent({ posts }: PostsContentProps) {
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
   const handleDeletePost = async (postId: string) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus postingan ini?')) {
-      return;
-    }
-    try {
-      await deletePost(postId);
-      toast.success('Postingan berhasil dihapus');
-    } catch (error: any) {
-      console.error('Delete post error:', error);
-      toast.error(error.message || 'Gagal menghapus postingan');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Postingan',
+      message: 'Apakah Anda yakin ingin menghapus postingan ini?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await deletePost(postId);
+          toast.success('Postingan berhasil dihapus');
+        } catch (error: any) {
+          console.error('Delete post error:', error);
+          toast.error(error.message || 'Gagal menghapus postingan');
+        }
+      }
+    });
   };
 
   return (
@@ -89,6 +107,30 @@ export default function PostsContent({ posts }: PostsContentProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-600 mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+              >
+                Ya, Lanjutkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

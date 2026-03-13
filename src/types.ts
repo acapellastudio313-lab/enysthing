@@ -19,8 +19,10 @@ export interface User {
   is_verified?: number;
   is_approved?: number;
   role: 'admin' | 'candidate' | 'voter' | 'moderator' | 'pengunjung';
+  persuratan_role?: 'petugas' | 'pimpinan';
   password?: string;
   lucky_number?: number;
+  hidden_menus?: string[];
 }
 
 export interface Candidate {
@@ -160,4 +162,50 @@ export interface GalleryImage {
   image_file_id: string;
   caption: string;
   created_at: string;
+}
+
+export interface Pimpinan {
+  id: string;
+  nama: string;
+  jabatan: string;
+  nip: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Surat {
+  id: string;
+  nomor: string;
+  tanggal: string;
+  pengirim?: string;
+  tujuan?: string;
+  perihal: string;
+  klasifikasi: string;
+  status: 'pending' | 'approved' | 'rejected';
+  type: 'masuk' | 'keluar';
+  authorName: string;
+  createdBy: string;
+  createdAt: any;
+  ringkasan?: string;
+  file_url?: string;
+  nomor_dokumen?: string;
+  buku_nomor_id?: string;
+}
+
+export interface BukuEntry {
+  id: string;
+  nomor_urut: number;
+  nomor_full: string;
+  kode_klasifikasi: string;
+  perihal: string;
+  tujuan: string;
+  petugas: string;
+  pimpinan: string;
+  pimpinan_id?: string;
+  status: 'Draft' | 'Digunakan' | 'Arsip';
+  type: 'masuk' | 'keluar';
+  tanggal: string;
+  nomor_dokumen?: string;
+  file_url?: string;
+  createdAt: any;
 }

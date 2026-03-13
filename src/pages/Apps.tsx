@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Vote, ChevronRight } from 'lucide-react';
+import { Vote, ChevronRight, Mail } from 'lucide-react';
 import { listenToSettings } from '../lib/db';
 import { User } from '../types';
 
@@ -23,8 +23,17 @@ export default function Apps({ user }: { user: User }) {
       color: 'bg-blue-500',
       path: '/apps/election',
       showBadge: electionStatus === 'in_progress'
+    },
+    {
+      id: 'persuratan',
+      name: 'Persuratan',
+      description: 'Manajemen surat masuk dan keluar',
+      icon: Mail,
+      color: 'bg-emerald-500',
+      path: '/apps/persuratan',
+      showBadge: false
     }
-  ];
+  ].filter(app => !user.hidden_menus?.includes(app.id));
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">

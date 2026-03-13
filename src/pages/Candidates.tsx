@@ -128,7 +128,7 @@ export default function Candidates({ user }: { user: User }) {
       updateSelectedCandidate(null);
     } catch (e: any) {
       console.error(e);
-      alert(e.message || 'Gagal memberikan suara. Mungkin Anda sudah memilih.');
+      toast.error(e.message || 'Gagal memberikan suara. Mungkin Anda sudah memilih.');
     } finally {
       setVoting(false);
     }
@@ -343,7 +343,7 @@ export default function Candidates({ user }: { user: User }) {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(`${window.location.origin}/candidates/${selectedCandidate.id}`);
-                      alert('Tautan profil kandidat disalin!');
+                      toast.success('Tautan profil kandidat disalin!');
                     }}
                     className="p-3 rounded-xl font-bold text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors flex items-center justify-center"
                     title="Bagikan"

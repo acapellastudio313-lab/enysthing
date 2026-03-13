@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { User } from '../types';
-import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Gamepad2, HelpCircle, RefreshCw, Plus, Trash2, Play, Square, Trophy, CheckCircle, XCircle, Clock, Hash, Users, Settings, ChevronRight, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, deleteDoc, serverTimestamp, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { getAllUsers, listenToSettings } from '../lib/db';
@@ -79,14 +80,28 @@ export default function Entertainment({ user }: { user: User }) {
   if (activeTab) {
     return (
       <div className="p-4 md:p-6 max-w-4xl mx-auto">
-        <Link to="/entertainment" className="text-emerald-600 font-bold mb-4 block">&larr; Kembali ke Menu Hiburan</Link>
-        {activeTab === 'kuis' ? (
-          <QuizSection user={user} isAdminOrMod={isAdminOrMod} />
-        ) : activeTab === 'spin' ? (
-          <SpinSection user={user} isAdminOrMod={isAdminOrMod} />
-        ) : activeTab === 'number' ? (
-          <NumberSection user={user} isAdminOrMod={isAdminOrMod} setActiveTab={() => {}} />
-        ) : null}
+        <Link to="/entertainment" className="inline-flex items-center gap-2 text-emerald-600 font-bold mb-6 hover:gap-3 transition-all">
+          <ChevronRight className="w-5 h-5 rotate-180" />
+          Kembali ke Menu Hiburan
+        </Link>
+        
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {activeTab === 'kuis' ? (
+              <QuizSection user={user} isAdminOrMod={isAdminOrMod} />
+            ) : activeTab === 'spin' ? (
+              <SpinSection user={user} isAdminOrMod={isAdminOrMod} />
+            ) : activeTab === 'number' ? (
+              <NumberSection user={user} isAdminOrMod={isAdminOrMod} setActiveTab={setActiveTab} />
+            ) : null}
+          </motion.div>
+        </AnimatePresence>
       </div>
     );
   }
@@ -228,26 +243,34 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
     
     // Create a shuffled array of numbers in the range
     const availableNumbers = Array.from({ length: Math.min(range, 2000) }, (_, i) => i + min);
+    
+    // Fisher-Yates shuffle
     for (let i = availableNumbers.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [availableNumbers[i], availableNumbers[j]] = [availableNumbers[j], availableNumbers[i]];
     }
     
+    // Assign numbers
     allUsers.forEach((u, index) => {
-      // Use unique number from shuffled array, or random if range exceeded
       if (index < availableNumbers.length) {
         newUserNumbers[u.id] = availableNumbers[index];
       } else {
+        // Fallback if users exceed range
         newUserNumbers[u.id] = Math.floor(Math.random() * range) + min;
       }
     });
+
+    const batch = writeBatch(db);
+    const numberRef = doc(db, 'entertainment', 'number');
     
-    await updateDoc(doc(db, 'entertainment', 'number'), {
+    batch.update(numberRef, {
       userNumbers: newUserNumbers,
       currentNumber: null,
       isGenerating: true,
       lastUpdated: Date.now()
     });
+    
+    await batch.commit();
 
     // Reset generating flag after animation duration
     setTimeout(() => {
@@ -486,26 +509,54 @@ function NumberSection({ user, isAdminOrMod, setActiveTab }: { user: User, isAdm
       )}
 
       {/* Number Display */}
-      <div className="bg-white p-12 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[300px]">
-        <div className="text-center space-y-4">
-          <p className="text-slate-500 font-medium uppercase tracking-widest text-sm">Nomor Anda Saat Ini</p>
+      <motion.div 
+        layout
+        className="bg-white p-12 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden"
+      >
+        {/* Decorative background element */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-amber-500"></div>
+        
+        <div className="text-center space-y-6 relative z-10">
+          <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">Nomor Anda Saat Ini</p>
           
-          <div className={clsx(
-            "text-8xl md:text-9xl font-black transition-all duration-300",
-            isAnimating ? "text-slate-300 scale-95 blur-sm" : "text-emerald-600 scale-100 blur-0"
-          )}>
+          <motion.div 
+            key={displayNumber}
+            initial={isAnimating ? { scale: 0.8, opacity: 0.5 } : { scale: 1.1, opacity: 1 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className={clsx(
+              "text-8xl md:text-9xl font-black transition-all duration-300 drop-shadow-sm",
+              isAnimating ? "text-slate-300 blur-sm" : "text-emerald-600 blur-0"
+            )}
+          >
             {displayNumber !== null ? displayNumber : '--'}
-          </div>
+          </motion.div>
           
-          {isAnimating && (
-            <p className="text-emerald-500 font-bold animate-pulse">Mengacak Nomor...</p>
-          )}
+          <AnimatePresence>
+            {isAnimating && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="flex items-center justify-center gap-2 text-emerald-500 font-bold"
+              >
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Mengacak Nomor...</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           {!isAnimating && displayNumber === null && (
-            <p className="text-slate-400 italic">Menunggu nomor dari admin...</p>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-slate-400 italic flex items-center gap-2 justify-center"
+            >
+              <AlertCircle className="w-4 h-4" />
+              Menunggu nomor dari admin...
+            </motion.p>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -634,18 +685,29 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
       return;
     }
     
-    // Clear old answers
-    const answersSnap = await getDocs(collection(db, 'entertainment', 'quiz', 'answers'));
-    answersSnap.forEach(async (d) => {
-      await deleteDoc(doc(db, 'entertainment', 'quiz', 'answers', d.id));
-    });
+    try {
+      // Clear old answers using batch
+      const answersSnap = await getDocs(collection(db, 'entertainment', 'quiz', 'answers'));
+      const batch = writeBatch(db);
+      answersSnap.docs.forEach((d) => {
+        batch.delete(d.ref);
+      });
 
-    const firstQ = quizState.questions[0];
-    await updateDoc(doc(db, 'entertainment', 'quiz'), {
-      status: 'active',
-      currentQuestionIndex: 0,
-      endTime: Date.now() + (firstQ.timeLimit * 1000)
-    });
+      const firstQ = quizState.questions[0];
+      const quizRef = doc(db, 'entertainment', 'quiz');
+      
+      batch.update(quizRef, {
+        status: 'active',
+        currentQuestionIndex: 0,
+        endTime: Date.now() + (firstQ.timeLimit * 1000)
+      });
+      
+      await batch.commit();
+      toast.success('Kuis dimulai!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal memulai kuis');
+    }
   };
 
   const handleNextQuestion = async () => {
@@ -668,41 +730,47 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
   const [isResetting, setIsResetting] = useState(false);
 
   const handleResetQuiz = async () => {
-    if (window.confirm('Apakah Anda yakin ingin mereset kuis? Semua soal dan jawaban akan dihapus.')) {
-      setIsResetting(true);
-      try {
-        const batch = writeBatch(db);
-        
-        // 1. Delete all answers
-        const answersSnap = await getDocs(collection(db, 'entertainment', 'quiz', 'answers'));
-        answersSnap.docs.forEach((doc) => {
-          batch.delete(doc.ref);
-        });
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reset Kuis',
+      message: 'Apakah Anda yakin ingin mereset kuis? Semua soal dan jawaban akan dihapus.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        setIsResetting(true);
+        try {
+          const batch = writeBatch(db);
+          
+          // 1. Delete all answers
+          const answersSnap = await getDocs(collection(db, 'entertainment', 'quiz', 'answers'));
+          answersSnap.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+          });
 
-        // 2. Reset the main quiz document, clearing questions
-        const quizRef = doc(db, 'entertainment', 'quiz');
-        batch.set(quizRef, {
-          status: 'waiting',
-          currentQuestionIndex: 0,
-          endTime: null,
-          questions: []
-        });
-        
-        await batch.commit();
-        
-        // 3. Force update local state immediately
-        setEditQuestions([]);
-        setAnswers([]);
-        setQuizState(prev => prev ? ({ ...prev, questions: [], status: 'waiting', currentQuestionIndex: 0, endTime: null }) : null);
-        
-        toast.success('Kuis berhasil direset sepenuhnya (soal dan jawaban dihapus)');
-      } catch (error) {
-        console.error('Error resetting quiz:', error);
-        toast.error('Gagal mereset kuis');
-      } finally {
-        setIsResetting(false);
+          // 2. Reset the main quiz document, clearing questions
+          const quizRef = doc(db, 'entertainment', 'quiz');
+          batch.set(quizRef, {
+            status: 'waiting',
+            currentQuestionIndex: 0,
+            endTime: null,
+            questions: []
+          });
+          
+          await batch.commit();
+          
+          // 3. Force update local state immediately
+          setEditQuestions([]);
+          setAnswers([]);
+          setQuizState(prev => prev ? ({ ...prev, questions: [], status: 'waiting', currentQuestionIndex: 0, endTime: null }) : null);
+          
+          toast.success('Kuis berhasil direset sepenuhnya (soal dan jawaban dihapus)');
+        } catch (error) {
+          console.error('Error resetting quiz:', error);
+          toast.error('Gagal mereset kuis');
+        } finally {
+          setIsResetting(false);
+        }
       }
-    }
+    });
   };
 
   const handleStopQuiz = async () => {
@@ -912,7 +980,11 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
 
       {/* Active Quiz View */}
       {quizState.status === 'active' && currentQ && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
+        >
           <div className="flex justify-between items-center mb-6">
             <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">
               Soal {quizState.currentQuestionIndex + 1} / {quizState.questions.length}
@@ -930,23 +1002,33 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
             {currentQ.text}
           </h2>
 
-          <div className="space-y-3 mb-8">
+          <div className="grid grid-cols-1 gap-3 mb-8">
             {currentQ.type === 'multiple_choice' ? (
               currentQ.options?.map((opt, idx) => (
-                <button
+                <motion.button
                   key={idx}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
                   onClick={() => !hasAnswered && (timeLeft || 0) > 0 && setUserAnswer(opt)}
                   disabled={hasAnswered || (timeLeft || 0) === 0}
                   className={clsx(
-                    "w-full text-left px-4 py-3 rounded-xl border-2 transition-all font-medium",
+                    "w-full text-left px-4 py-4 rounded-xl border-2 transition-all font-medium",
                     userAnswer === opt 
                       ? "border-emerald-500 bg-emerald-50 text-emerald-700" 
                       : "border-slate-200 hover:border-slate-300 text-slate-700",
                     (hasAnswered || (timeLeft || 0) === 0) && userAnswer !== opt && "opacity-50 cursor-not-allowed"
                   )}
                 >
-                  {opt}
-                </button>
+                  <div className="flex items-center gap-3">
+                    <div className={clsx(
+                      "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm",
+                      userAnswer === opt ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"
+                    )}>
+                      {String.fromCharCode(65 + idx)}
+                    </div>
+                    {opt}
+                  </div>
+                </motion.button>
               ))
             ) : (
               <input
@@ -955,26 +1037,32 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
                 value={userAnswer}
                 onChange={(e) => setUserAnswer(e.target.value)}
                 disabled={hasAnswered || (timeLeft || 0) === 0}
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 outline-none disabled:opacity-50 disabled:bg-slate-50"
+                className="w-full px-4 py-4 border-2 border-slate-200 rounded-xl focus:border-emerald-500 outline-none disabled:opacity-50 disabled:bg-slate-50 text-lg"
               />
             )}
           </div>
 
           {!hasAnswered && (timeLeft || 0) > 0 ? (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleSubmitAnswer}
               disabled={!userAnswer.trim()}
-              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 shadow-lg shadow-emerald-200"
             >
               Kirim Jawaban
-            </button>
+            </motion.button>
           ) : (
-            <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <p className="font-bold text-slate-700">
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center p-6 bg-slate-50 rounded-xl border border-slate-200"
+            >
+              <p className="font-bold text-slate-700 text-lg">
                 {hasAnswered ? "Jawaban Anda telah direkam!" : "Waktu Habis!"}
               </p>
               <p className="text-sm text-slate-500 mt-1">Menunggu soal selanjutnya...</p>
-            </div>
+            </motion.div>
           )}
 
           {/* Admin Controls during active quiz */}
@@ -982,19 +1070,19 @@ function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
             <div className="mt-8 pt-6 border-t border-slate-100 flex gap-3">
               <button
                 onClick={handleStopQuiz}
-                className="flex-1 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200 transition-colors flex items-center justify-center gap-2"
               >
                 <Square className="w-4 h-4" /> Hentikan
               </button>
               <button
                 onClick={handleNextQuestion}
-                className="flex-1 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
               >
                 {quizState.currentQuestionIndex + 1 < quizState.questions.length ? 'Lanjut Soal' : 'Selesai Kuis'}
               </button>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Finished Quiz View (Only Admin/Mod sees results) */}
@@ -1286,33 +1374,39 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
   const [isResetting, setIsResetting] = useState(false);
 
   const handleResetSpin = async () => {
-    if (window.confirm('Apakah Anda yakin ingin mereset putaran? Semua item akan dihapus.')) {
-      setIsResetting(true);
-      try {
-        // Use setDoc to overwrite everything cleanly with empty items
-        await setDoc(doc(db, 'entertainment', 'spin'), {
-          items: [],
-          isSpinning: false,
-          targetIndex: null,
-          lastSpinTime: null,
-          lastResult: null,
-          spinDuration: 10
-        });
-        
-        // Force update local state immediately
-        setEditItems([]);
-        setEditDuration(10);
-        setRotation(0);
-        setSpinState(prev => prev ? ({ ...prev, items: [], isSpinning: false, targetIndex: null, lastResult: null }) : null);
-        
-        toast.success('Putaran berhasil direset (semua item dihapus)');
-      } catch (err) {
-        console.error(err);
-        toast.error('Gagal mereset putaran');
-      } finally {
-        setIsResetting(false);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reset Putaran',
+      message: 'Apakah Anda yakin ingin mereset putaran? Semua item akan dihapus.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        setIsResetting(true);
+        try {
+          // Use setDoc to overwrite everything cleanly with empty items
+          await setDoc(doc(db, 'entertainment', 'spin'), {
+            items: [],
+            isSpinning: false,
+            targetIndex: null,
+            lastSpinTime: null,
+            lastResult: null,
+            spinDuration: 10
+          });
+          
+          // Force update local state immediately
+          setEditItems([]);
+          setEditDuration(10);
+          setRotation(0);
+          setSpinState(prev => prev ? ({ ...prev, items: [], isSpinning: false, targetIndex: null, lastResult: null }) : null);
+          
+          toast.success('Putaran berhasil direset (semua item dihapus)');
+        } catch (err) {
+          console.error(err);
+          toast.error('Gagal mereset putaran');
+        } finally {
+          setIsResetting(false);
+        }
       }
-    }
+    });
   };
 
   const handleSpin = async () => {
@@ -1374,37 +1468,43 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
     const handleDeleteLastResult = async () => {
       if (!spinState?.lastResult) return;
       
-      if (window.confirm(`Apakah Anda yakin ingin menghapus "${spinState.lastResult.text}" secara permanen dari daftar putaran?`)) {
-        try {
-          // Fetch latest data to ensure we don't overwrite other changes
-          const currentDoc = await getDocs(query(collection(db, 'entertainment'), where('__name__', '==', 'spin')));
-          if (currentDoc.empty) return;
-          
-          const data = currentDoc.docs[0].data() as SpinState;
-          const currentItems = data.items || [];
-          
-          // Try to find item by ID first
-          let newItems = currentItems.filter(item => item.id !== spinState.lastResult!.id);
-          
-          // If length is same, try by text (fallback in case ID changed or mismatch)
-          if (newItems.length === currentItems.length) {
-             newItems = currentItems.filter(item => item.text !== spinState.lastResult!.text);
+      setConfirmDialog({
+        isOpen: true,
+        title: 'Hapus Item',
+        message: `Apakah Anda yakin ingin menghapus "${spinState.lastResult.text}" secara permanen dari daftar putaran?`,
+        onConfirm: async () => {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+          try {
+            // Fetch latest data to ensure we don't overwrite other changes
+            const currentDoc = await getDocs(query(collection(db, 'entertainment'), where('__name__', '==', 'spin')));
+            if (currentDoc.empty) return;
+            
+            const data = currentDoc.docs[0].data() as SpinState;
+            const currentItems = data.items || [];
+            
+            // Try to find item by ID first
+            let newItems = currentItems.filter(item => item.id !== spinState.lastResult!.id);
+            
+            // If length is same, try by text (fallback in case ID changed or mismatch)
+            if (newItems.length === currentItems.length) {
+               newItems = currentItems.filter(item => item.text !== spinState.lastResult!.text);
+            }
+            
+            await updateDoc(doc(db, 'entertainment', 'spin'), {
+              items: newItems,
+              lastResult: null // Clear result after deleting
+            });
+            
+            // Update local state immediately for responsiveness
+            setSpinState(prev => prev ? ({ ...prev, items: newItems, lastResult: null }) : null);
+            
+            toast.success('Item berhasil dihapus dari putaran');
+          } catch (err) {
+            console.error(err);
+            toast.error('Gagal menghapus item');
           }
-          
-          await updateDoc(doc(db, 'entertainment', 'spin'), {
-            items: newItems,
-            lastResult: null // Clear result after deleting
-          });
-          
-          // Update local state immediately for responsiveness
-          setSpinState(prev => prev ? ({ ...prev, items: newItems, lastResult: null }) : null);
-          
-          toast.success('Item berhasil dihapus dari putaran');
-        } catch (err) {
-          console.error(err);
-          toast.error('Gagal menghapus item');
         }
-      }
+      });
     };
 
   if (!spinState) return <div className="p-8 text-center text-slate-500">Memuat putaran...</div>;
@@ -1590,6 +1690,30 @@ function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-600 mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+              >
+                Ya, Lanjutkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
