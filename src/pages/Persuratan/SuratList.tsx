@@ -23,6 +23,7 @@ import {
   Hash,
   ArrowRight
 } from 'lucide-react';
+import { sendNotification } from '../../lib/notifications';
 import { collection, query, onSnapshot, where, orderBy, doc, updateDoc, arrayUnion, serverTimestamp, addDoc, runTransaction, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { clsx } from 'clsx';
@@ -130,14 +131,11 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
         })
       });
       
-      await addDoc(collection(db, 'notifications'), {
-        user_id: tagUserId,
-        type: 'system',
-        message: `Disposisi baru dari ${user.name}: ${disposisiNote}`,
-        link: `/apps/persuratan`,
-        is_read: 0,
-        created_at: new Date().toISOString()
-      });
+      await sendNotification(
+        tagUserId,
+        `Disposisi baru dari ${user.name}: ${disposisiNote}`,
+        `/apps/persuratan`
+      );
 
       toast.success('Disposisi berhasil dikirim');
       setShowDisposisiModal(false);
@@ -196,6 +194,12 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
 
         transaction.set(counterRef, { current: nextNumber }, { merge: true });
       });
+
+      await sendNotification(
+        item.createdBy,
+        `Surat Anda telah diteruskan ke Buku Nomor: ${item.perihal}`,
+        `/apps/persuratan`
+      );
 
       toast.success('Berhasil diteruskan ke Buku Nomor');
     } catch (err) {
@@ -340,9 +344,9 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
 
       {/* Detail Modal */}
       {showDetailModal && selectedSurat && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 pb-20">
+          <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-emerald-600 rounded-2xl text-white shadow-lg shadow-emerald-100">
                   <FileText className="w-6 h-6" />
@@ -357,7 +361,7 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
               </button>
             </div>
 
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[70vh] overflow-y-auto">
+            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto flex-1">
               <div className="space-y-6">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">

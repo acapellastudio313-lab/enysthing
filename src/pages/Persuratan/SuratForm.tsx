@@ -3,6 +3,7 @@ import { User, Pimpinan } from '../../types';
 import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool } from 'lucide-react';
 import SignatureModal from '../../components/SignatureModal';
 import { toast } from 'sonner';
+import { sendNotification } from '../../lib/notifications';
 import { GoogleGenAI, Type } from '@google/genai';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc, onSnapshot, query, where } from 'firebase/firestore';
@@ -259,6 +260,15 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       });
 
       toast.success(initialData ? 'Surat berhasil diperbarui' : 'Surat dan Nomor berhasil disimpan');
+      
+      if (!initialData && type === 'keluar' && selectedPimpinanId) {
+        await sendNotification(
+          selectedPimpinanId,
+          `Surat keluar baru perlu ditandatangani: ${result.perihal}`,
+          `/apps/persuratan`
+        );
+      }
+
       setFile(null);
       if (!initialData) setResult(null);
       onSuccess();
