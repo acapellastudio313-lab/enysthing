@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,8 +8,10 @@ import { collection, doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, delete
 import { getAllUsers, listenToSettings } from '../lib/db';
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 export default function Entertainment({ user }: { user: User }) {
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') as 'kuis' | 'spin' | 'number' | null;
   
@@ -94,9 +96,9 @@ export default function Entertainment({ user }: { user: User }) {
             transition={{ duration: 0.3 }}
           >
             {activeTab === 'kuis' ? (
-              <QuizSection user={user} isAdminOrMod={isAdminOrMod} />
+              <QuizSection user={user} isAdminOrMod={isAdminOrMod} confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
             ) : activeTab === 'spin' ? (
-              <SpinSection user={user} isAdminOrMod={isAdminOrMod} />
+              <SpinSection user={user} isAdminOrMod={isAdminOrMod} confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
             ) : activeTab === 'number' ? (
               <NumberSection user={user} isAdminOrMod={isAdminOrMod} setActiveTab={setActiveTab} />
             ) : null}
@@ -588,7 +590,7 @@ interface QuizAnswer {
   isCorrect?: boolean;
 }
 
-function QuizSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
+function QuizSection({ user, isAdminOrMod, confirmDialog, setConfirmDialog }: { user: User, isAdminOrMod: boolean, confirmDialog: { isOpen: boolean, title: string, message: string, onConfirm: () => void }, setConfirmDialog: React.Dispatch<React.SetStateAction<{ isOpen: boolean, title: string, message: string, onConfirm: () => void }>> }) {
   const [quizState, setQuizState] = useState<QuizState | null>(null);
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [userAnswer, setUserAnswer] = useState('');
@@ -1159,7 +1161,7 @@ interface SpinState {
   spinDuration?: number; // Duration in seconds
 }
 
-function SpinSection({ user, isAdminOrMod }: { user: User, isAdminOrMod: boolean }) {
+function SpinSection({ user, isAdminOrMod, confirmDialog, setConfirmDialog }: { user: User, isAdminOrMod: boolean, confirmDialog: { isOpen: boolean, title: string, message: string, onConfirm: () => void }, setConfirmDialog: React.Dispatch<React.SetStateAction<{ isOpen: boolean, title: string, message: string, onConfirm: () => void }>> }) {
   const [spinState, setSpinState] = useState<SpinState | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editItems, setEditItems] = useState<SpinItem[]>([]);

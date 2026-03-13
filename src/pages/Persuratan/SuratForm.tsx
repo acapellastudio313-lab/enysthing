@@ -12,12 +12,15 @@ import { toRoman } from '../../utils';
 
 let aiClient: GoogleGenAI | null = null;
 
-function getAi(): GoogleGenAI {
+// Inisialisasi Gemini di sisi client harus dilakukan dengan hati-hati.
+// Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
+function getAi(): GoogleGenAI | null {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('GEMINI_API_KEY tidak tersedia. Fitur AI dinonaktifkan.');
+    return null;
+  }
   if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is required');
-    }
     aiClient = new GoogleGenAI({ apiKey });
   }
   return aiClient;
@@ -78,7 +81,11 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       reader.onloadend = async () => {
         try {
           const base64Data = reader.result as string;
-          const response = await getAi().models.generateContent({
+          const ai = getAi();
+          if (!ai) {
+            throw new Error('Fitur AI tidak tersedia (API Key tidak ditemukan)');
+          }
+          const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: {
               parts: [

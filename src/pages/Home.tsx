@@ -5,6 +5,7 @@ import PostItem from '../components/PostItem';
 import Stories from '../components/Stories';
 import { formatDateWIB, compressImage } from '../utils';
 import { createPost, listenToPosts, likePost, pinPost, uploadFile } from '../lib/db';
+import { toast } from 'sonner';
 
 export default function Home({ user }: { user: User }) {
   const [posts, setPosts] = useState<Post[]>([]);

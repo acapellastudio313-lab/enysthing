@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDateWIB } from '../utils';
 import { getCandidates, getMyVote, listenToSettings, castVote } from '../lib/db';
+import { toast } from 'sonner';
 
 export default function Candidates({ user }: { user: User }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
