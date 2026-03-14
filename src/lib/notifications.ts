@@ -3,7 +3,7 @@ import { db } from './firebase';
 
 export const sendNotification = async (userId: string, message: string, link: string) => {
   try {
-    await addDoc(collection(db, 'notifications'), {
+    await addDoc(collection(db, 'users', userId, 'notifications'), {
       user_id: userId,
       type: 'system',
       message,

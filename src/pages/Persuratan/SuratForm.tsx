@@ -17,7 +17,7 @@ let aiClient: GoogleGenAI | null = null;
 // Inisialisasi Gemini di sisi client harus dilakukan dengan hati-hati.
 // Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
 function getAi(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn('GEMINI_API_KEY tidak tersedia. Fitur AI dinonaktifkan.');
     return null;
@@ -182,7 +182,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       await runTransaction(db, async (transaction) => {
         let fullNumber = result.nomor;
         let bukuId = initialData?.buku_nomor_id;
-        let nextNumber = initialData?.nomor_urut;
+        let nextNumber = initialData?.nomor_urut || 0;
 
         if (!initialData) {
           const counterId = `surat_${type}_${new Date().getFullYear()}`;
