@@ -17,7 +17,11 @@ let aiClient: GoogleGenAI | null = null;
 // Inisialisasi Gemini di sisi client harus dilakukan dengan hati-hati.
 // Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
 function getAi(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+  // Try to get the API key from various possible environment configurations
+  const apiKey = (process.env && process.env.GEMINI_API_KEY) || 
+                 (import.meta.env && import.meta.env.GEMINI_API_KEY) ||
+                 (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY);
+                 
   if (!apiKey) {
     console.warn('GEMINI_API_KEY tidak tersedia. Fitur AI dinonaktifkan.');
     return null;

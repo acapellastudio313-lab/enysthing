@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db } from '../lib/firebase';
-import { collection, doc, runTransaction, onSnapshot, query, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, doc, runTransaction, onSnapshot, query, orderBy, serverTimestamp, Timestamp, deleteDoc, updateDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { toRoman } from '../utils';
+import { Trash2, Edit2, XCircle } from 'lucide-react';
 
 interface NomorSurat {
   id: string;
@@ -16,6 +17,8 @@ interface NomorSurat {
 
 export default function BukuNomor({ user }: { user: User }) {
   const [nomorList, setNomorList] = useState<NomorSurat[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPerihal, setEditPerihal] = useState('');
 
   useEffect(() => {
     const q = query(collection(db, 'buku_kendali'), orderBy('tanggal', 'desc'));
@@ -59,6 +62,28 @@ export default function BukuNomor({ user }: { user: User }) {
     }
   };
 
+  const deleteNomor = async (id: string) => {
+    if (!confirm('Yakin ingin menghapus nomor ini?')) return;
+    try {
+      await deleteDoc(doc(db, 'buku_kendali', id));
+      toast.success('Nomor berhasil dihapus');
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menghapus nomor');
+    }
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'buku_kendali', id), { perihal: editPerihal });
+      setEditingId(null);
+      toast.success('Perihal berhasil diperbarui');
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal memperbarui perihal');
+    }
+  };
+
   return (
     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
       <div className="flex justify-between items-center mb-6">
@@ -74,7 +99,9 @@ export default function BukuNomor({ user }: { user: User }) {
               <th className="px-4 py-3">Nomor</th>
               <th className="px-4 py-3">Tanggal</th>
               <th className="px-4 py-3">Staf</th>
+              <th className="px-4 py-3">Perihal</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -84,9 +111,35 @@ export default function BukuNomor({ user }: { user: User }) {
                 <td className="px-4 py-3">{item.tanggal?.toDate().toLocaleDateString()}</td>
                 <td className="px-4 py-3">{item.staf}</td>
                 <td className="px-4 py-3">
+                  {editingId === item.id ? (
+                    <input 
+                      value={editPerihal}
+                      onChange={e => setEditPerihal(e.target.value)}
+                      className="border rounded px-2 py-1 w-full"
+                    />
+                  ) : item.perihal}
+                </td>
+                <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded-full text-xs font-bold ${item.status === 'draft' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                     {item.status}
                   </span>
+                </td>
+                <td className="px-4 py-3 flex gap-2">
+                  {editingId === item.id ? (
+                    <>
+                      <button onClick={() => saveEdit(item.id)} className="text-emerald-600 font-bold">Simpan</button>
+                      <button onClick={() => setEditingId(null)} className="text-slate-500">Batal</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => { setEditingId(item.id); setEditPerihal(item.perihal); }} className="text-blue-600 hover:text-blue-800">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => deleteNomor(item.id)} className="text-red-600 hover:text-red-800">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
