@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { User, Pimpinan, BukuEntry } from '../../types';
-import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare, Eye, FileText } from 'lucide-react';
+import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare, Eye, FileText, Camera, Upload, FileCheck } from 'lucide-react';
 import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where, arrayUnion, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { getFileFromChunks } from '../../lib/db';
+import { getFileFromChunks, uploadFile } from '../../lib/db';
 import { toast } from 'sonner';
 import { clsx } from 'clsx';
 import { toRoman } from '../../utils';
 import { Loader2 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 
 const CLASSIFICATION_CODES = [
   { code: 'HK', label: 'HK (Hukum)' },
@@ -55,6 +57,14 @@ export default function BukuNomor({ user }: { user: User }) {
   const [selectedEntry, setSelectedEntry] = useState<BukuEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<BukuEntry | null>(null);
   const [showDetailEntryModal, setShowDetailEntryModal] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [isMerging, setIsMerging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -161,13 +171,23 @@ export default function BukuNomor({ user }: { user: User }) {
 
     setIsSubmitting(true);
     try {
+      let fileId = editingEntry?.file_data || '';
+      
+      if (file) {
+        setUploadProgress(0);
+        fileId = await uploadFile(file, (progress) => {
+          setUploadProgress(progress);
+        });
+      }
+
       if (editingEntry) {
         await updateDoc(doc(db, 'buku_kendali', editingEntry.id), {
           kode_klasifikasi: formData.kode_klasifikasi,
           perihal: formData.perihal,
           tujuan: formData.tujuan,
           pimpinan_id: formData.pimpinan_id,
-          tanggal: formData.tanggal
+          tanggal: formData.tanggal,
+          file_data: fileId
         });
         toast.success('Entry berhasil diperbarui');
       } else {
@@ -204,6 +224,7 @@ export default function BukuNomor({ user }: { user: User }) {
             status: 'Draft',
             type: activeType,
             tanggal: formData.tanggal,
+            file_data: fileId,
             createdAt: serverTimestamp()
           });
 
@@ -213,6 +234,8 @@ export default function BukuNomor({ user }: { user: User }) {
       }
       setShowAddModal(false);
       setEditingEntry(null);
+      setFile(null);
+      setUploadProgress(0);
       setFormData({ 
         kode_klasifikasi: 'HK', 
         perihal: '', 
@@ -225,6 +248,162 @@ export default function BukuNomor({ user }: { user: User }) {
       toast.error('Gagal memproses nomor surat');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const startCamera = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error('Browser Anda tidak mendukung akses kamera.');
+      return;
+    }
+
+    try {
+      setShowCamera(true);
+      setTimeout(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            } 
+          });
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.onloadedmetadata = () => {
+              videoRef.current?.play().catch(e => console.error('Video play error:', e));
+            };
+          }
+        } catch (e) {
+          console.warn('Failed to get environment camera, falling back to default:', e);
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              videoRef.current.onloadedmetadata = () => {
+                videoRef.current?.play().catch(e => console.error('Video play error:', e));
+              };
+            }
+          } catch (err) {
+            console.error('Final camera error:', err);
+            toast.error('Gagal mengakses kamera. Pastikan izin kamera diberikan.');
+            setShowCamera(false);
+          }
+        }
+      }, 300);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menginisialisasi kamera.');
+      setShowCamera(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      const maxDim = 1200;
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+      
+      if (width > height) {
+        if (width > maxDim) {
+          height *= maxDim / width;
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width *= maxDim / height;
+          height = maxDim;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, width, height);
+        
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        const contrast = 1.2;
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = Math.max(0, Math.min(255, (data[i] - 128) * contrast + 128));
+          data[i + 1] = Math.max(0, Math.min(255, (data[i + 1] - 128) * contrast + 128));
+          data[i + 2] = Math.max(0, Math.min(255, (data[i + 2] - 128) * contrast + 128));
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setCapturedImages(prev => [...prev, dataUrl]);
+        toast.success(`Foto ke-${capturedImages.length + 1} berhasil diambil`);
+      }
+    }
+  };
+
+  const mergeAndSavePhotos = async () => {
+    if (capturedImages.length === 0) return;
+    setIsMerging(true);
+    try {
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      for (let i = 0; i < capturedImages.length; i++) {
+        const imgData = capturedImages[i];
+        if (i > 0) pdf.addPage();
+        
+        const img = await new Promise<HTMLImageElement>((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.src = imgData;
+        });
+
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+        const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+        const width = imgWidth * ratio;
+        const height = imgHeight * ratio;
+        const x = (pageWidth - width) / 2;
+        const y = (pageHeight - height) / 2;
+
+        pdf.addImage(imgData, 'JPEG', x, y, width, height);
+      }
+
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], `scan_${Date.now()}.pdf`, { type: 'application/pdf' });
+      
+      setFile(pdfFile);
+      stopCamera();
+      setCapturedImages([]);
+      toast.success('Foto berhasil digabung menjadi PDF');
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal membuat PDF dari foto');
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        toast.error('Ukuran file terlalu besar. Maksimal 5MB.');
+        return;
+      }
+      setFile(selectedFile);
     }
   };
 
@@ -699,6 +878,66 @@ export default function BukuNomor({ user }: { user: User }) {
                   ))}
                 </select>
               </div>
+
+              {/* File Upload & Camera Section */}
+              <div className="space-y-3 pt-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lampiran Dokumen (Opsional)</label>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className={clsx(
+                      "flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed transition-all",
+                      file ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+                    )}
+                  >
+                    <Upload className="w-5 h-5" />
+                    <span className="text-xs font-bold">{file ? 'File Terpilih' : 'Upload File'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 transition-all"
+                  >
+                    <Camera className="w-5 h-5" />
+                    <span className="text-xs font-bold">Ambil Foto</span>
+                  </button>
+                </div>
+
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                />
+
+                {file && (
+                  <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <div className="flex items-center gap-2">
+                      <FileCheck className="w-4 h-4 text-emerald-600" />
+                      <span className="text-xs font-bold text-emerald-700 truncate max-w-[200px]">{file.name}</span>
+                    </div>
+                    <button 
+                      onClick={() => setFile(null)}
+                      className="p-1 hover:bg-emerald-100 rounded-full text-emerald-600"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {uploadProgress > 0 && uploadProgress < 100 && (
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className="bg-emerald-500 h-full transition-all duration-300" 
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="p-6 bg-slate-50 flex gap-3">
@@ -999,6 +1238,94 @@ export default function BukuNomor({ user }: { user: User }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Camera Modal */}
+      {showCamera && createPortal(
+        <div className="fixed inset-0 bg-black z-[1000] flex flex-col">
+          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent z-10">
+            <div className="text-white">
+              <h3 className="font-bold text-lg">Ambil Foto Dokumen</h3>
+              <p className="text-xs opacity-80">Posisikan dokumen di tengah frame</p>
+            </div>
+            <button 
+              onClick={stopCamera}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+            >
+              <XCircle className="w-8 h-8" />
+            </button>
+          </div>
+
+          <div className="flex-1 relative bg-slate-900 flex items-center justify-center overflow-hidden">
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            
+            {/* Scan Overlay */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="w-[85%] h-[70%] border-2 border-white/30 rounded-3xl relative">
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-500 rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-emerald-500 rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-500 rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-500 rounded-br-lg" />
+                
+                {/* Scanning Line Animation */}
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-scan" />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 bg-black flex flex-col gap-4">
+            {capturedImages.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {capturedImages.map((img, idx) => (
+                  <div key={idx} className="relative flex-shrink-0">
+                    <img src={img} alt={`Capture ${idx}`} className="w-16 h-20 object-cover rounded-lg border border-white/20" />
+                    <button 
+                      onClick={() => setCapturedImages(prev => prev.filter((_, i) => i !== idx))}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 text-white/60 text-xs font-bold">
+                {capturedImages.length} Foto Diambil
+              </div>
+              
+              <button 
+                onClick={capturePhoto}
+                className="w-20 h-20 bg-white rounded-full p-1 shadow-xl active:scale-95 transition-transform"
+              >
+                <div className="w-full h-full rounded-full border-4 border-slate-900 flex items-center justify-center">
+                  <div className="w-14 h-14 bg-emerald-500 rounded-full" />
+                </div>
+              </button>
+
+              <div className="flex-1 flex justify-end">
+                {capturedImages.length > 0 && (
+                  <button 
+                    onClick={mergeAndSavePhotos}
+                    disabled={isMerging}
+                    className="bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all disabled:opacity-50"
+                  >
+                    {isMerging ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileCheck className="w-5 h-5" />}
+                    {isMerging ? 'Merging...' : 'Selesai'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
