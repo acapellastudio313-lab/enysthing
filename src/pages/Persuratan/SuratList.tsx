@@ -68,6 +68,16 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
   });
 
   useEffect(() => {
+    if (suratId && surat.length > 0) {
+      const found = surat.find(s => s.id === suratId);
+      if (found) {
+        setSelectedSurat(found);
+        setShowDetailModal(true);
+      }
+    }
+  }, [suratId, surat]);
+
+  useEffect(() => {
     const q = query(
       collection(db, 'users'),
       where('persuratan_role', 'in', ['pimpinan', 'petugas'])

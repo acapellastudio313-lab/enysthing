@@ -167,8 +167,8 @@ export default function BukuNomor({ user }: { user: User }) {
       setDisposisiNote('');
       setTagUserId('');
     } catch (err) {
-      console.error(err);
-      toast.error('Gagal mengirim disposisi');
+      console.error('Disposition error details:', err);
+      toast.error(`Gagal mengirim disposisi: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
     }
