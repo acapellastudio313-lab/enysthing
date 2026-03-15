@@ -112,7 +112,7 @@ export default function PersuratanDashboard({ user, onNavigate }: { user: User, 
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Welcome Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard Persuratan</h1>
@@ -259,7 +259,11 @@ export default function PersuratanDashboard({ user, onNavigate }: { user: User, 
                   className="hover:bg-slate-50 transition-colors cursor-pointer group"
                 >
                   <td className="px-6 py-4 text-sm font-mono font-bold text-slate-900">{item.nomor}</td>
-                  <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate">{item.perihal}</td>
+                  <td className="px-6 py-4 text-sm text-slate-600">
+                    <div className="max-w-md break-words leading-relaxed">
+                      {item.perihal}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-sm text-slate-500">{item.tanggal}</td>
                   <td className="px-6 py-4">
                     <span className={clsx(

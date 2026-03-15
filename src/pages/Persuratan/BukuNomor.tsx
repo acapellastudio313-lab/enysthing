@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, Pimpinan, BukuEntry } from '../../types';
-import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare } from 'lucide-react';
+import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare, PenTool } from 'lucide-react';
 import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where, arrayUnion } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { toast } from 'sonner';
 import { clsx } from 'clsx';
+import SignatureModal from '../../components/SignatureModal';
 import { toRoman } from '../../utils';
 
 const CLASSIFICATION_CODES = [
@@ -46,11 +47,16 @@ export default function BukuNomor({ user }: { user: User }) {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedFileForPreview, setSelectedFileForPreview] = useState<string | null>(null);
   const [showDisposisiModal, setShowDisposisiModal] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [disposisiNote, setDisposisiNote] = useState('');
   const [tagUserId, setTagUserId] = useState('');
+  const [signature, setSignature] = useState<string | null>(null);
+  const [isTTE, setIsTTE] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<BukuEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<BukuEntry | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [showDetailEntryModal, setShowDetailEntryModal] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -100,24 +106,34 @@ export default function BukuNomor({ user }: { user: User }) {
     const targetUser = availableUsers.find(u => u.id === tagUserId);
     setIsSubmitting(true);
     try {
+      const disposisiData = {
+        note: disposisiNote,
+        from: user.name,
+        to: targetUser?.name || 'Unknown',
+        toId: tagUserId,
+        createdAt: new Date(),
+        signature: signature || null,
+        isTTE: isTTE
+      };
+
       // If linked to a surat, update the surat document too
       if (selectedEntry.surat_id) {
         await updateDoc(doc(db, 'surat', selectedEntry.surat_id), {
-          disposisi: arrayUnion({
-            note: disposisiNote,
-            from: user.name,
-            to: targetUser?.name || 'Unknown',
-            toId: tagUserId,
-            createdAt: new Date(),
-            signature: null
-          })
+          disposisi: arrayUnion(disposisiData)
         });
       }
+
+      // Also update the buku_kendali entry to keep track of disposisi history if needed
+      await updateDoc(doc(db, 'buku_kendali', selectedEntry.id), {
+        disposisi: arrayUnion(disposisiData)
+      });
 
       toast.success('Disposisi berhasil dikirim');
       setShowDisposisiModal(false);
       setDisposisiNote('');
       setTagUserId('');
+      setSignature(null);
+      setIsTTE(false);
     } catch (err) {
       console.error(err);
       toast.error('Gagal mengirim disposisi');
@@ -134,13 +150,23 @@ export default function BukuNomor({ user }: { user: User }) {
 
     setIsSubmitting(true);
     try {
+      let fileData = '';
+      if (file) {
+        fileData = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
       if (editingEntry) {
         await updateDoc(doc(db, 'buku_kendali', editingEntry.id), {
           kode_klasifikasi: formData.kode_klasifikasi,
           perihal: formData.perihal,
           tujuan: formData.tujuan,
           pimpinan_id: formData.pimpinan_id,
-          tanggal: formData.tanggal
+          tanggal: formData.tanggal,
+          ...(fileData && { file_data: fileData })
         });
         toast.success('Entry berhasil diperbarui');
       } else {
@@ -174,6 +200,7 @@ export default function BukuNomor({ user }: { user: User }) {
             status: 'Draft',
             type: activeType,
             tanggal: formData.tanggal,
+            file_data: fileData,
             createdAt: serverTimestamp()
           });
 
@@ -183,6 +210,7 @@ export default function BukuNomor({ user }: { user: User }) {
       }
       setShowAddModal(false);
       setEditingEntry(null);
+      setFile(null);
       setFormData({ 
         kode_klasifikasi: 'HK', 
         perihal: '', 
@@ -324,7 +352,7 @@ export default function BukuNomor({ user }: { user: User }) {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -460,8 +488,8 @@ export default function BukuNomor({ user }: { user: User }) {
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-widest">
               <tr>
-                <th className="px-6 py-5">Nomor Urut</th>
-                <th className="px-6 py-5">Nomor Dokumen</th>
+                <th className="px-6 py-5">Nomor Surat yang Diambil</th>
+                <th className="px-6 py-5">Nomor Dokumen (File Upload)</th>
                 <th className="px-6 py-5">Kode Klasifikasi</th>
                 <th className="px-6 py-5">Tanggal</th>
                 <th className="px-6 py-5">Perihal</th>
@@ -480,11 +508,11 @@ export default function BukuNomor({ user }: { user: User }) {
                 >
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-1">
-                      <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">#{entry.nomor_urut}</span>
+                      <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">{entry.nomor_full || '-'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <span className="text-xs font-mono font-bold text-slate-600 whitespace-nowrap bg-slate-100 px-2 py-1 rounded-md">{entry.nomor_full || '-'}</span>
+                    <span className="text-xs font-mono font-bold text-slate-600 whitespace-nowrap bg-slate-100 px-2 py-1 rounded-md">{entry.nomor_dokumen || entry.nomor_full || '-'}</span>
                   </td>
                   <td className="px-6 py-5">
                     <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">{entry.kode_klasifikasi || '-'}</span>
@@ -540,7 +568,7 @@ export default function BukuNomor({ user }: { user: User }) {
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
-                      {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
+                      {(user.role === 'admin' || user.persuratan_role === 'petugas' || user.persuratan_role === 'pimpinan') && (
                         <>
                           <button 
                             onClick={() => {
@@ -657,6 +685,24 @@ export default function BukuNomor({ user }: { user: User }) {
                     <option key={p.id} value={p.id}>{p.nama} - {p.jabatan}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Upload Dokumen (Opsional)</label>
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center cursor-pointer hover:border-emerald-500 transition-all"
+                >
+                  <Download className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                  <p className="text-xs text-slate-500 font-bold">{file ? file.name : 'Klik untuk upload file'}</p>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={e => setFile(e.target.files?.[0] || null)}
+                    accept="image/*,.pdf"
+                  />
+                </div>
               </div>
             </div>
 
@@ -884,6 +930,32 @@ export default function BukuNomor({ user }: { user: User }) {
                   </select>
                 </div>
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Tanda Tangan (Opsional)</label>
+                <div className="space-y-3">
+                  <button 
+                    onClick={() => setShowSignatureModal(true)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 outline-none focus:border-emerald-500 flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2 font-bold text-sm">
+                      <PenTool className="w-4 h-4" /> {signature ? 'Tanda Tangan Tersimpan' : 'Buat/Unggah Tanda Tangan'}
+                    </span>
+                    {signature && <img src={signature} alt="Signature" className="h-8 object-contain" />}
+                  </button>
+                  
+                  <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                    <input 
+                      type="checkbox" 
+                      id="tte" 
+                      checked={isTTE} 
+                      onChange={e => setIsTTE(e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
+                    <label htmlFor="tte" className="text-xs font-bold text-slate-600 cursor-pointer">Gunakan Tanda Tangan TTE (Elektronik)</label>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="p-6 bg-slate-50 flex gap-3">
@@ -904,6 +976,12 @@ export default function BukuNomor({ user }: { user: User }) {
           </div>
         </div>
       )}
+
+      <SignatureModal 
+        isOpen={showSignatureModal} 
+        onClose={() => setShowSignatureModal(false)} 
+        onSave={(sig) => { setSignature(sig); setShowSignatureModal(false); }}
+      />
 
       {/* File Preview Modal */}
       {selectedFileForPreview && (

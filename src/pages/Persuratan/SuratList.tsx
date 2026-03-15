@@ -49,6 +49,8 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState('all');
   const location = useLocation();
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -271,34 +273,70 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
     
     const matchesFilter = filter === 'all' || item.status === filter;
     
-    return matchesSearch && matchesFilter;
+    const itemDate = new Date(item.tanggal);
+    const matchesYear = selectedYear === 'all' || itemDate.getFullYear().toString() === selectedYear;
+    const matchesMonth = selectedMonth === 'all' || (itemDate.getMonth() + 1).toString() === selectedMonth;
+    
+    return matchesSearch && matchesFilter && matchesYear && matchesMonth;
   });
 
+  const years = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - i).toString());
+  const months = [
+    { id: '1', name: 'Januari' }, { id: '2', name: 'Februari' }, { id: '3', name: 'Maret' },
+    { id: '4', name: 'April' }, { id: '5', name: 'Mei' }, { id: '6', name: 'Juni' },
+    { id: '7', name: 'Juli' }, { id: '8', name: 'Agustus' }, { id: '9', name: 'September' },
+    { id: '10', name: 'Oktober' }, { id: '11', name: 'November' }, { id: '12', name: 'Desember' }
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Search & Filter */}
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input 
             placeholder="Cari nomor surat, perihal, atau pengirim..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 shadow-sm"
+            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 shadow-sm font-medium"
           />
         </div>
-        <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
-          <Filter className="w-5 h-5" />
-          <select 
-            className="bg-transparent outline-none"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          >
-            <option value="all">Semua Status</option>
-            <option value="approved">Disetujui</option>
-            <option value="pending">Menunggu</option>
-          </select>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 shadow-sm">
+            <Calendar className="w-4 h-4 text-slate-400" />
+            <select 
+              className="bg-transparent outline-none text-sm"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+            >
+              <option value="all">Semua Tahun</option>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 shadow-sm">
+            <Filter className="w-4 h-4 text-slate-400" />
+            <select 
+              className="bg-transparent outline-none text-sm"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              <option value="all">Semua Bulan</option>
+              {months.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 shadow-sm">
+            <CheckCircle2 className="w-4 h-4 text-slate-400" />
+            <select 
+              className="bg-transparent outline-none text-sm"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            >
+              <option value="all">Semua Status</option>
+              <option value="approved">Disetujui</option>
+              <option value="pending">Menunggu</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* List */}
@@ -350,24 +388,15 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
               <div className="flex items-center gap-2">
                 {item.file_data && (
                   <div className="flex items-center gap-1 mr-2" onClick={e => e.stopPropagation()}>
-                    <a 
-                      href={item.file_data} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
+                    <button 
+                      onClick={() => setPreviewFile(item.file_data || null)}
                       className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors"
                       title="Lihat Dokumen"
                     >
-                      <ExternalLinkIcon className="w-4 h-4" />
-                    </a>
+                      <Eye className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedSurat(item); setShowDisposisiModal(true); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Disposisi
-                </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleTeruskanKeBukuNomor(item); }}
                   disabled={processingId === item.id || !!item.buku_nomor_id}
@@ -494,15 +523,29 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
               {/* Preview Modal */}
               {previewFile && (
                 <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-4">
-                  <div className="bg-white w-full max-w-4xl h-[80vh] rounded-2xl overflow-hidden flex flex-col">
-                    <div className="p-4 border-b flex justify-between items-center">
-                      <h3 className="font-bold">Preview Dokumen</h3>
-                      <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-100 rounded-full">
-                        <XCircle className="w-6 h-6" />
+                  <div className="bg-white w-full max-w-5xl h-[90vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+                    <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-emerald-600" />
+                        <h3 className="font-bold text-slate-900">Preview Dokumen</h3>
+                      </div>
+                      <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-white rounded-full transition-colors">
+                        <XCircle className="w-6 h-6 text-slate-400" />
                       </button>
                     </div>
-                    <div className="flex-1 overflow-auto">
-                      <iframe src={previewFile} className="w-full h-full" title="Preview" />
+                    <div className="flex-1 bg-slate-800 relative overflow-hidden">
+                      {previewFile.startsWith('data:application/pdf') ? (
+                        <iframe src={previewFile} className="w-full h-full border-none" title="Preview PDF" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                          <img 
+                            src={previewFile} 
+                            alt="Preview" 
+                            className="max-w-full h-auto shadow-2xl rounded-lg"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -538,13 +581,6 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
             </div>
 
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-3">
-              <button 
-                onClick={() => { setShowDetailModal(false); setShowDisposisiModal(true); }}
-                className="flex-1 min-w-[140px] py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
-              >
-                <MessageSquare className="w-4 h-4" />
-                Disposisi
-              </button>
               <button 
                 onClick={() => handleTeruskanKeBukuNomor(selectedSurat)}
                 disabled={processingId === selectedSurat.id || !!selectedSurat.buku_nomor_id}
