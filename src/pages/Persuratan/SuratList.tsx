@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { User, Surat } from '../../types';
 import { 
@@ -493,10 +494,10 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
               </div>
 
               {/* Preview Modal */}
-              {previewFile && (
-                <div className="fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4">
-                  <div className="bg-white w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
-                    <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+              {previewFile && createPortal(
+                <div className="fixed inset-0 bg-black/90 z-[2000] flex items-center justify-center p-4 md:p-8">
+                  <div className="bg-white w-full max-w-5xl h-full max-h-[95vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+                    <div className="p-4 border-b flex justify-between items-center bg-slate-50 shrink-0">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-emerald-100 rounded-xl">
                           <FileText className="w-5 h-5 text-emerald-600" />
@@ -507,22 +508,21 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                         <XCircle className="w-6 h-6 text-slate-500" />
                       </button>
                     </div>
-                    <div className="flex-1 bg-slate-100 relative overflow-hidden">
+                    <div className="flex-1 bg-slate-100 relative overflow-auto flex items-center justify-center p-2 md:p-4">
                       {(previewFile.startsWith('data:application/pdf') || previewFile.toLowerCase().includes('.pdf')) ? (
-                        <iframe src={previewFile} className="w-full h-full border-none" title="Preview PDF" />
+                        <iframe src={previewFile} className="w-full h-full border-none rounded-lg shadow-inner" title="Preview PDF" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
-                          <img 
-                            src={previewFile} 
-                            alt="Preview" 
-                            className="max-w-full max-h-full object-contain shadow-lg rounded-lg" 
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
+                        <img 
+                          src={previewFile} 
+                          alt="Preview" 
+                          className="max-w-full max-h-full object-contain shadow-lg rounded-lg" 
+                          referrerPolicy="no-referrer"
+                        />
                       )}
                     </div>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
 
               {/* Disposisi History */}

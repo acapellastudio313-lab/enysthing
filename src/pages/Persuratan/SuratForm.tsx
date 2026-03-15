@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { User, Pimpinan } from '../../types';
 import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool, Eye, Clock, CheckCircle2, X, Plus, Minus } from 'lucide-react';
 import SignatureModal from '../../components/SignatureModal';
@@ -189,9 +190,10 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], `camera_scan_${Date.now()}.pdf`, { type: 'application/pdf' });
       
-      // Check size (Base64 will be ~33% larger)
-      if (pdfBlob.size > 1536 * 1024) {
-        toast.error('Hasil scan PDF terlalu besar (> 1.5MB). Coba ambil lebih sedikit foto atau kurangi kualitas.');
+      // Check size (Base64 will be ~33% larger, but we use Storage now)
+      // Limit to 5MB for Storage
+      if (pdfBlob.size > 5 * 1024 * 1024) {
+        toast.error('Hasil scan PDF terlalu besar (> 5MB). Coba ambil lebih sedikit foto atau kurangi kualitas.');
         setIsMerging(false);
         return;
       }
@@ -491,10 +493,10 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       </div>
 
       {/* Preview Modal */}
-      {previewFile && (
-        <div className="fixed inset-0 bg-black/90 z-[500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+      {previewFile && createPortal(
+        <div className="fixed inset-0 bg-black/90 z-[2000] flex items-center justify-center p-4 md:p-8">
+          <div className="bg-white w-full max-w-5xl h-full max-h-[95vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-emerald-100 rounded-xl">
                   <FileText className="w-5 h-5 text-emerald-600" />
@@ -505,22 +507,21 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
                 <X className="w-6 h-6 text-slate-500" />
               </button>
             </div>
-            <div className="flex-1 bg-slate-100 relative overflow-hidden">
+            <div className="flex-1 bg-slate-100 relative overflow-auto flex items-center justify-center p-2 md:p-4">
               {previewFile.startsWith('data:application/pdf') || previewFile.toLowerCase().includes('.pdf') ? (
-                <iframe src={previewFile} className="w-full h-full border-none" title="Preview PDF" />
+                <iframe src={previewFile} className="w-full h-full border-none rounded-lg shadow-inner" title="Preview PDF" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
-                  <img 
-                    src={previewFile} 
-                    alt="Preview" 
-                    className="max-w-full max-h-full object-contain shadow-lg rounded-lg" 
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
+                <img 
+                  src={previewFile} 
+                  alt="Preview" 
+                  className="max-w-full max-h-full object-contain shadow-lg rounded-lg" 
+                  referrerPolicy="no-referrer"
+                />
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {result && (
@@ -639,9 +640,9 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
         </div>
       )}
       {/* Camera Modal */}
-      {showCamera && (
-        <div className="fixed inset-0 bg-black z-[1000] flex flex-col">
-          <div className="p-4 flex justify-between items-center bg-black/50 backdrop-blur-md">
+      {showCamera && createPortal(
+        <div className="fixed inset-0 bg-black z-[2000] flex flex-col">
+          <div className="p-4 flex justify-between items-center bg-black/50 backdrop-blur-md shrink-0">
             <div className="text-white">
               <h3 className="font-bold">Kamera Dokumen</h3>
               <p className="text-xs opacity-70">{capturedImages.length} foto diambil</p>
@@ -664,7 +665,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
             <canvas ref={canvasRef} className="hidden" />
             
             {/* Captured Thumbnails */}
-            <div className="absolute bottom-24 left-0 right-0 flex justify-center gap-2 p-4 overflow-x-auto">
+            <div className="absolute bottom-24 left-0 right-0 flex justify-center gap-2 p-4 overflow-x-auto bg-black/20 backdrop-blur-sm">
               {capturedImages.map((img, i) => (
                 <div key={i} className="relative shrink-0">
                   <img src={img} alt={`Capture ${i}`} className="w-16 h-16 object-cover rounded-lg border-2 border-white shadow-lg" />
@@ -679,7 +680,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
             </div>
           </div>
 
-          <div className="p-8 bg-black/50 backdrop-blur-md flex items-center justify-around">
+          <div className="p-8 bg-black/50 backdrop-blur-md flex items-center justify-around shrink-0">
             <div className="w-12" /> {/* Spacer */}
             <button 
               onClick={capturePhoto}
@@ -698,7 +699,8 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
               <span className="text-[10px] font-bold uppercase tracking-widest">Selesai</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
