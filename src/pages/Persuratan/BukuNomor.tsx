@@ -104,7 +104,12 @@ export default function BukuNomor({ user }: { user: User }) {
     return () => unsubscribe();
   }, []);
 
-  const handlePreview = async (fileData: string) => {
+  const handlePreview = async (fileData: string | File) => {
+    if (fileData instanceof File) {
+      setSelectedFileForPreview(URL.createObjectURL(fileData));
+      return;
+    }
+
     if (!fileData) return;
 
     if (fileData.startsWith('http') || fileData.startsWith('blob:') || fileData.startsWith('data:')) {
@@ -149,6 +154,12 @@ export default function BukuNomor({ user }: { user: User }) {
             signature: null
           })
         });
+        
+        await sendNotification(
+          tagUserId,
+          `Disposisi baru untuk surat ${selectedEntry.nomor_full}: ${disposisiNote}`,
+          `/apps/persuratan?tab=persuratan_surat_masuk&suratId=${selectedEntry.surat_id}`
+        );
       }
 
       toast.success('Disposisi berhasil dikirim');
@@ -206,7 +217,7 @@ export default function BukuNomor({ user }: { user: User }) {
           const now = new Date(formData.tanggal);
           const romanMonth = toRoman(now.getMonth() + 1);
           const year = now.getFullYear();
-          const fullNumber = `${String(nextNumber).padStart(3, '0')}/${formData.kode_klasifikasi}/${romanMonth}/${year}`;
+          const fullNumber = `${nextNumber}/${formData.kode_klasifikasi}/${romanMonth}/${year}`;
 
           const pimpinan = pimpinanList.find(p => p.id === formData.pimpinan_id);
 
@@ -958,6 +969,12 @@ export default function BukuNomor({ user }: { user: User }) {
                     <div className="flex items-center gap-2">
                       <FileCheck className="w-4 h-4 text-emerald-600" />
                       <span className="text-xs font-bold text-emerald-700 truncate max-w-[200px]">{file.name}</span>
+                      <button 
+                        onClick={() => handlePreview(file)}
+                        className="text-emerald-600 hover:text-emerald-800 p-1"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </div>
                     <button 
                       onClick={() => setFile(null)}

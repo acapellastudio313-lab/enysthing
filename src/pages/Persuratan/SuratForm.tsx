@@ -416,7 +416,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           const romanMonth = toRoman(now.getMonth() + 1);
           const year = now.getFullYear();
           fullNumber = type === 'keluar' 
-            ? `${String(nextNumber).padStart(3, '0')}/${result.klasifikasi}/${romanMonth}/${year}`
+            ? `${nextNumber}/${result.klasifikasi}/${romanMonth}/${year}`
             : result.nomor;
 
           transaction.set(counterRef, { current: nextNumber }, { merge: true });

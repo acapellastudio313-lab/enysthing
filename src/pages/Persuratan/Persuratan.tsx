@@ -47,8 +47,12 @@ export default function Persuratan({ user }: { user: User }) {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
+    const suratId = params.get('suratId');
     if (tab && menuItems.some(item => item.id === tab)) {
       setActiveSubTab(tab);
+    }
+    if (suratId) {
+      setActiveSuratId(suratId);
     }
   }, [location.search]);
 
