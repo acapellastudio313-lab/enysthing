@@ -7,6 +7,7 @@ import { db } from '../../lib/firebase';
 import { getFileFromChunks, uploadFile } from '../../lib/db';
 import { toast } from 'sonner';
 import { clsx } from 'clsx';
+import { sendNotification } from '../../lib/notifications';
 import { toRoman } from '../../utils';
 import { Loader2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -35,7 +36,8 @@ export default function BukuNomor({ user }: { user: User }) {
     perihal: '',
     tujuan: '',
     pimpinan_id: '',
-    tanggal: new Date().toISOString().split('T')[0]
+    tanggal: new Date().toISOString().split('T')[0],
+    custom_text: ''
   });
   const [pimpinanForm, setPimpinanForm] = useState({
     nama: '',
@@ -218,6 +220,7 @@ export default function BukuNomor({ user }: { user: User }) {
           const romanMonth = toRoman(now.getMonth() + 1);
           const year = now.getFullYear();
           const fullNumber = `${nextNumber}/${formData.kode_klasifikasi}/${romanMonth}/${year}`;
+          const customNumber = `${formData.custom_text || nextNumber}/${formData.kode_klasifikasi}/${romanMonth}/${year}`;
 
           const pimpinan = pimpinanList.find(p => p.id === formData.pimpinan_id);
 
@@ -226,8 +229,8 @@ export default function BukuNomor({ user }: { user: User }) {
 
           const entryData = {
             nomor_urut: nextNumber,
-            nomor_full: fullNumber,
-            nomor_dokumen: fullNumber, // Default to full number if not linked to a document yet
+            nomor_full: customNumber,
+            nomor_dokumen: customNumber, // Default to full number if not linked to a document yet
             kode_klasifikasi: formData.kode_klasifikasi,
             perihal: formData.perihal,
             tujuan: formData.tujuan,
@@ -247,8 +250,8 @@ export default function BukuNomor({ user }: { user: User }) {
 
           // Create corresponding surat entry
           const suratData = {
-            nomor: fullNumber,
-            nomor_dokumen: fullNumber,
+            nomor: customNumber,
+            nomor_dokumen: customNumber,
             klasifikasi: formData.kode_klasifikasi,
             perihal: formData.perihal,
             tujuan: activeType === 'keluar' ? formData.tujuan : '',
@@ -280,7 +283,8 @@ export default function BukuNomor({ user }: { user: User }) {
         perihal: '', 
         tujuan: '', 
         pimpinan_id: '',
-        tanggal: new Date().toISOString().split('T')[0]
+        tanggal: new Date().toISOString().split('T')[0],
+        custom_text: ''
       });
     } catch (err) {
       console.error(err);
@@ -484,7 +488,8 @@ export default function BukuNomor({ user }: { user: User }) {
       perihal: entry.perihal,
       tujuan: entry.tujuan,
       pimpinan_id: entry.pimpinan_id || '',
-      tanggal: entry.tanggal
+      tanggal: entry.tanggal,
+      custom_text: '' // Or extract from entry if stored there
     });
     setShowAddModal(true);
   };
@@ -902,6 +907,16 @@ export default function BukuNomor({ user }: { user: User }) {
                   placeholder="Contoh: Permohonan Izin Cuti Tahunan..."
                   rows={3}
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-emerald-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Kustom Teks Nomor (Opsional)</label>
+                <input 
+                  value={formData.custom_text}
+                  onChange={e => setFormData({...formData, custom_text: e.target.value})}
+                  placeholder="Contoh: 1A (jika ingin mengubah angka awal)"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-emerald-500"
                 />
               </div>
 
