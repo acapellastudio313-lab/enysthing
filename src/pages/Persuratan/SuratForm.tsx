@@ -87,6 +87,11 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
   }, []);
 
   const startCamera = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error('Browser Anda tidak mendukung akses kamera.');
+      return;
+    }
+
     try {
       // Try environment camera, fallback to default
       let stream;
@@ -120,12 +125,31 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      
+      // Resize to max 1200px to ensure manageable size
+      const maxDim = 1200;
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+      
+      if (width > height) {
+        if (width > maxDim) {
+          height *= maxDim / width;
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width *= maxDim / height;
+          height = maxDim;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        ctx.drawImage(video, 0, 0, width, height);
+        // Compress with 0.7 quality
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         setCapturedImages(prev => [...prev, dataUrl]);
         toast.success(`Foto ke-${capturedImages.length + 1} berhasil diambil`);
       }
