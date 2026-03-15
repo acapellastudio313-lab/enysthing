@@ -59,6 +59,7 @@ export default function BukuNomor({ user }: { user: User }) {
   const [selectedEntry, setSelectedEntry] = useState<BukuEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<BukuEntry | null>(null);
   const [showDetailEntryModal, setShowDetailEntryModal] = useState(false);
+  const [showEditNomorModal, setShowEditNomorModal] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
@@ -481,6 +482,29 @@ export default function BukuNomor({ user }: { user: User }) {
     }
   };
 
+  const handleUpdateNomor = async () => {
+    if (!selectedEntry) return;
+    try {
+      await updateDoc(doc(db, 'buku_kendali', selectedEntry.id), {
+        nomor_full: selectedEntry.nomor_full,
+        nomor_dokumen: selectedEntry.nomor_full
+      });
+      // Also update surat if linked
+      if (selectedEntry.surat_id) {
+        await updateDoc(doc(db, 'surat', selectedEntry.surat_id), {
+          nomor: selectedEntry.nomor_full,
+          nomor_dokumen: selectedEntry.nomor_full,
+          nomor_buku: selectedEntry.nomor_full
+        });
+      }
+      toast.success('Nomor berhasil diupdate');
+      setShowEditNomorModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal mengupdate nomor');
+    }
+  };
+
   const handleEdit = (entry: BukuEntry) => {
     setEditingEntry(entry);
     setFormData({
@@ -814,6 +838,16 @@ export default function BukuNomor({ user }: { user: User }) {
                         {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
                           <>
                             <div className="h-px bg-slate-100 my-1" />
+                            <button 
+                              onClick={() => {
+                                setSelectedEntry(entry);
+                                setShowEditNomorModal(true);
+                              }}
+                              className="w-full px-4 py-2 text-left text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-3"
+                            >
+                              <Hash className="w-4 h-4" />
+                              Edit Nomor
+                            </button>
                             <button 
                               onClick={() => {
                                 setSelectedEntry(entry);
@@ -1197,6 +1231,46 @@ export default function BukuNomor({ user }: { user: User }) {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Nomor Modal */}
+      {showEditNomorModal && selectedEntry && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-bold text-slate-900">Edit Nomor Surat</h3>
+              <button onClick={() => setShowEditNomorModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
+                <XCircle className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Nomor Surat</label>
+                <input 
+                  value={selectedEntry.nomor_full}
+                  onChange={e => setSelectedEntry({...selectedEntry, nomor_full: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 flex gap-3">
+              <button 
+                onClick={() => setShowEditNomorModal(false)}
+                className="flex-1 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleUpdateNomor}
+                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
+              >
+                Simpan Perubahan
+              </button>
             </div>
           </div>
         </div>
