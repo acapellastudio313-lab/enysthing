@@ -18,16 +18,7 @@ let aiClient: GoogleGenAI | null = null;
 // Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
 function getAi(): GoogleGenAI | null {
   // Try to get the API key from various possible environment configurations
-  let apiKey = '';
-  try {
-    apiKey = process.env.GEMINI_API_KEY || '';
-  } catch (e) {
-    // Ignore ReferenceError if process is not defined
-  }
-  
-  if (!apiKey && import.meta.env) {
-    apiKey = import.meta.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
-  }
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
                  
   if (!apiKey) {
     console.warn('GEMINI_API_KEY tidak tersedia. Fitur AI dinonaktifkan.');
@@ -138,7 +129,17 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           toast.success('AI berhasil memproses surat');
         } catch (err: any) {
           console.error('Gemini AI Error:', err);
-          toast.error(err.message || 'Gagal memproses surat dengan AI');
+          toast.error(err.message || 'Gagal memproses surat dengan AI. Silakan isi manual.');
+          // Fallback to empty form
+          setResult({
+            nomor: '',
+            tanggal: new Date().toISOString().split('T')[0],
+            pengirim: '',
+            tujuan: '',
+            perihal: '',
+            klasifikasi: 'UM',
+            ringkasan: ''
+          });
         } finally {
           setIsExtracting(false);
         }
@@ -276,7 +277,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
         await sendNotification(
           selectedPimpinanId,
           `Surat keluar baru perlu ditandatangani: ${result.perihal}`,
-          `/apps/persuratan`
+          `/apps/persuratan?tab=persuratan_surat_keluar&suratId=${suratRef.id}`
         );
       }
 

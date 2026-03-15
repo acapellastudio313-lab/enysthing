@@ -818,7 +818,7 @@ export default function Stories({ user }: { user: User }) {
           // We check the 'views' array in each story
           const allViewed = group.stories.every(story => {
             const views = story.views || [];
-            return views.some(v => v.id === user.id);
+            return views.some(v => v.id?.toString() === user.id?.toString());
           });
           
           return (

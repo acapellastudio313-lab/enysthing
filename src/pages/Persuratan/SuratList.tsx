@@ -125,7 +125,7 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
       
       await sendNotification(
         tagUserId,
-        `Disposisi baru dari ${user.name}: ${disposisiNote}`,
+        `Disposisi baru dari ${user.name} untuk surat nomor ${selectedSurat.nomor}: ${disposisiNote}`,
         `/apps/persuratan?tab=persuratan_surat_${type}&suratId=${selectedSurat.id}`
       );
 
@@ -471,9 +471,14 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
                             <p className="text-xs font-bold text-slate-900">{d.from} <span className="text-slate-400 font-normal">→</span> {d.to}</p>
-                            {d.signature && <QrCode className="w-4 h-4 text-emerald-600" />}
                           </div>
-                          <p className="text-sm text-slate-600 italic">"{d.note}"</p>
+                          <p className="text-sm text-slate-600 italic mb-2">"{d.note}"</p>
+                          {d.signature && (
+                            <div className="mt-2 p-2 bg-white rounded-lg border border-slate-100 inline-block">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ditandatangani oleh {d.from}</p>
+                              <img src={d.signature} alt="Tanda Tangan" className="h-12 object-contain" />
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

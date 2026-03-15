@@ -103,8 +103,8 @@ export async function getFileFromChunks(fileId: string): Promise<string | null> 
 }
 
 // User Functions
-export const getUser = async (id: string): Promise<User | null> => {
-  const docRef = doc(db, "users", id);
+export const getUser = async (id: string | number): Promise<User | null> => {
+  const docRef = doc(db, "users", id.toString());
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
     return { id: docSnap.id, ...docSnap.data() } as User;
@@ -524,7 +524,7 @@ export const deleteStory = async (storyId: string) => {
   }
 };
 
-export const viewStory = async (storyId: string, userId: string) => {
+export const viewStory = async (storyId: string, userId: string | number) => {
   const user = await getUser(userId);
   if (!user) return;
 
@@ -542,7 +542,7 @@ export const viewStory = async (storyId: string, userId: string) => {
     const data = storySnap.data();
     const views = data.views || [];
     // Check if user already viewed to avoid duplicates
-    if (!views.some((v: any) => v.id === userId)) {
+    if (!views.some((v: any) => v.id?.toString() === userId?.toString())) {
       await updateDoc(storyRef, {
         views: arrayUnion(viewData)
       });
