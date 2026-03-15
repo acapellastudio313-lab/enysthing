@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { XCircle, Upload, Eraser, PenTool } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface SignatureModalProps {
   isOpen: boolean;
@@ -20,12 +21,12 @@ export default function SignatureModal({ isOpen, onClose, onSave }: SignatureMod
     } else if (sigCanvas.current && !sigCanvas.current.isEmpty()) {
       onSave(sigCanvas.current.toDataURL());
     } else {
-      alert('Silakan buat tanda tangan atau unggah file tanda tangan.');
+      toast.error('Silakan buat tanda tangan atau unggah file tanda tangan.');
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <h3 className="font-bold text-slate-900">Tanda Tangan</h3>

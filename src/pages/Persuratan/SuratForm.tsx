@@ -6,9 +6,9 @@ import SignatureModal from '../../components/SignatureModal';
 import { toast } from 'sonner';
 import { sendNotification } from '../../lib/notifications';
 import { GoogleGenAI, Type } from '@google/genai';
-import { db, storage } from '../../lib/firebase';
+import { db } from '../../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc, onSnapshot, query, where } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadFile, getFileFromChunks } from '../../lib/db';
 import { clsx } from 'clsx';
 import { toRoman } from '../../utils';
 import { jsPDF } from 'jspdf';
@@ -77,7 +77,37 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
   const [signature, setSignature] = useState<string | null>(initialData?.signature || null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePreview = async (fileData: string | File) => {
+    if (fileData instanceof File) {
+      setPreviewFile(URL.createObjectURL(fileData));
+      return;
+    }
+
+    if (!fileData) return;
+
+    if (fileData.startsWith('http') || fileData.startsWith('blob:') || fileData.startsWith('data:')) {
+      setPreviewFile(fileData);
+    } else {
+      // It's likely a Firestore file ID
+      setIsPreviewLoading(true);
+      try {
+        const url = await getFileFromChunks(fileData);
+        if (url) {
+          setPreviewFile(url);
+        } else {
+          toast.error('Gagal memuat dokumen');
+        }
+      } catch (err) {
+        console.error('Preview error:', err);
+        toast.error('Gagal memuat dokumen');
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    }
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'pimpinan'), where('is_active', '==', true));
@@ -94,23 +124,46 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
     }
 
     try {
-      // Try environment camera, fallback to default
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: { exact: 'environment' } } 
-        });
-      } catch (e) {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      }
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setShowCamera(true);
-      }
+      setShowCamera(true);
+      // Wait for modal to render so videoRef is available
+      setTimeout(async () => {
+        try {
+          // Try environment camera first
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            } 
+          });
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.onloadedmetadata = () => {
+              videoRef.current?.play().catch(e => console.error('Video play error:', e));
+            };
+          }
+        } catch (e) {
+          console.warn('Failed to get environment camera, falling back to default:', e);
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              videoRef.current.onloadedmetadata = () => {
+                videoRef.current?.play().catch(e => console.error('Video play error:', e));
+              };
+            }
+          } catch (err) {
+            console.error('Final camera error:', err);
+            toast.error('Gagal mengakses kamera. Pastikan izin kamera diberikan.');
+            setShowCamera(false);
+          }
+        }
+      }, 300);
     } catch (err) {
       console.error(err);
-      toast.error('Gagal mengakses kamera. Pastikan izin kamera diberikan.');
+      toast.error('Gagal menginisialisasi kamera.');
+      setShowCamera(false);
     }
   };
 
@@ -322,11 +375,11 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       let fileUrl = initialData?.file_data || '';
       
       if (file) {
-        console.log('DEBUG: Uploading file to Firebase Storage...');
-        const fileRef = ref(storage, `surat/${type}/${Date.now()}_${file.name}`);
-        await uploadBytes(fileRef, file);
-        fileUrl = await getDownloadURL(fileRef);
-        console.log('DEBUG: File uploaded, URL:', fileUrl);
+        console.log('DEBUG: Uploading file to Firestore (chunking)...');
+        fileUrl = await uploadFile(file, (progress) => {
+          setUploadProgress(progress);
+        });
+        console.log('DEBUG: File uploaded to Firestore, ID:', fileUrl);
       }
 
       await runTransaction(db, async (transaction) => {
@@ -481,8 +534,12 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setPreviewFile(URL.createObjectURL(file))} className="text-emerald-600 hover:text-emerald-700 transition-colors">
-                <Eye className="w-5 h-5" />
+              <button 
+                onClick={() => handlePreview(file)} 
+                disabled={isPreviewLoading}
+                className="text-emerald-600 hover:text-emerald-700 transition-colors disabled:opacity-50"
+              >
+                {isPreviewLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Eye className="w-5 h-5" />}
               </button>
               <button onClick={() => { setFile(null); setResult(null); }} className="text-slate-400 hover:text-red-500 transition-colors">
                 <XCircle className="w-5 h-5" />
@@ -660,6 +717,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
               ref={videoRef} 
               autoPlay 
               playsInline 
+              muted
               className="w-full h-full object-cover"
             />
             <canvas ref={canvasRef} className="hidden" />

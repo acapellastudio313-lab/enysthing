@@ -28,8 +28,10 @@ import {
 import { sendNotification } from '../../lib/notifications';
 import { collection, query, onSnapshot, where, orderBy, doc, updateDoc, arrayUnion, serverTimestamp, addDoc, runTransaction, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { getFileFromChunks } from '../../lib/db';
 import { clsx } from 'clsx';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import { toRoman } from '../../utils';
 import SuratForm from './SuratForm';
 import SignatureModal from '../../components/SignatureModal';
@@ -38,6 +40,7 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
   const [surat, setSurat] = useState<Surat[]>([]);
   const [selectedSurat, setSelectedSurat] = useState<Surat | null>(null);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showDisposisiModal, setShowDisposisiModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -170,6 +173,30 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
     } catch (err) {
       console.error(err);
       toast.error('Gagal mengakhiri disposisi');
+    }
+  };
+
+  const handlePreview = async (fileData: string) => {
+    if (!fileData) return;
+
+    if (fileData.startsWith('http') || fileData.startsWith('blob:') || fileData.startsWith('data:')) {
+      setPreviewFile(fileData);
+    } else {
+      // It's likely a Firestore file ID
+      setIsPreviewLoading(true);
+      try {
+        const url = await getFileFromChunks(fileData);
+        if (url) {
+          setPreviewFile(url);
+        } else {
+          toast.error('Gagal memuat dokumen');
+        }
+      } catch (err) {
+        console.error('Preview error:', err);
+        toast.error('Gagal memuat dokumen');
+      } finally {
+        setIsPreviewLoading(false);
+      }
     }
   };
 
@@ -471,19 +498,22 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                   {selectedSurat.file_data ? (
                     <div className="flex items-center gap-3">
                       <button 
-                        onClick={() => setPreviewFile(selectedSurat.file_data || null)}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                        onClick={() => handlePreview(selectedSurat.file_data || '')}
+                        disabled={isPreviewLoading}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
                       >
-                        <Eye className="w-4 h-4" />
-                        Lihat Dokumen
+                        {isPreviewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                        {isPreviewLoading ? 'Memuat...' : 'Lihat Dokumen'}
                       </button>
-                      <a 
-                        href={selectedSurat.file_data} 
-                        download="lampiran_surat.pdf"
-                        className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"
-                      >
-                        <Download className="w-5 h-5" />
-                      </a>
+                      {selectedSurat.file_data.startsWith('http') && (
+                        <a 
+                          href={selectedSurat.file_data} 
+                          download="lampiran_surat.pdf"
+                          className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"
+                        >
+                          <Download className="w-5 h-5" />
+                        </a>
+                      )}
                     </div>
                   ) : (
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">

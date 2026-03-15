@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { User, Pimpinan, BukuEntry } from '../../types';
 import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare, Eye, FileText } from 'lucide-react';
-import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where, arrayUnion } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where, arrayUnion, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { getFileFromChunks } from '../../lib/db';
 import { toast } from 'sonner';
 import { clsx } from 'clsx';
 import { toRoman } from '../../utils';
+import { Loader2 } from 'lucide-react';
 
 const CLASSIFICATION_CODES = [
   { code: 'HK', label: 'HK (Hukum)' },
@@ -45,6 +47,7 @@ export default function BukuNomor({ user }: { user: User }) {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedFileForPreview, setSelectedFileForPreview] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [showDisposisiModal, setShowDisposisiModal] = useState(false);
   const [disposisiNote, setDisposisiNote] = useState('');
   const [tagUserId, setTagUserId] = useState('');
@@ -90,6 +93,30 @@ export default function BukuNomor({ user }: { user: User }) {
     });
     return () => unsubscribe();
   }, []);
+
+  const handlePreview = async (fileData: string) => {
+    if (!fileData) return;
+
+    if (fileData.startsWith('http') || fileData.startsWith('blob:') || fileData.startsWith('data:')) {
+      setSelectedFileForPreview(fileData);
+    } else {
+      // It's likely a Firestore file ID
+      setIsPreviewLoading(true);
+      try {
+        const url = await getFileFromChunks(fileData);
+        if (url) {
+          setSelectedFileForPreview(url);
+        } else {
+          toast.error('Gagal memuat dokumen');
+        }
+      } catch (err) {
+        console.error('Preview error:', err);
+        toast.error('Gagal memuat dokumen');
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    }
+  };
 
   const handleDisposisi = async () => {
     if (!selectedEntry || !tagUserId) {
@@ -840,14 +867,12 @@ export default function BukuNomor({ user }: { user: User }) {
               {selectedEntry.file_data && (
                 <div className="pt-4 border-t border-slate-100">
                   <button 
-                    onClick={() => {
-                      // Open file preview modal
-                      setSelectedFileForPreview(selectedEntry.file_data || null);
-                    }}
-                    className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                    onClick={() => handlePreview(selectedEntry.file_data || '')}
+                    disabled={isPreviewLoading}
+                    className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 disabled:opacity-50"
                   >
-                    <ExternalLink className="w-4 h-4" />
-                    Buka Dokumen Terkait
+                    {isPreviewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                    {isPreviewLoading ? 'Memuat...' : 'Buka Dokumen Terkait'}
                   </button>
                 </div>
               )}
@@ -935,7 +960,7 @@ export default function BukuNomor({ user }: { user: User }) {
               </button>
             </div>
             <div className="flex-1 bg-slate-100 relative overflow-hidden">
-              {selectedFileForPreview.startsWith('data:application/pdf') ? (
+              {selectedFileForPreview.startsWith('data:application/pdf') || selectedFileForPreview.toLowerCase().includes('.pdf') ? (
                 <iframe src={selectedFileForPreview} className="w-full h-full border-none" title="Preview PDF" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
