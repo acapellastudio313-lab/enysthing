@@ -202,10 +202,36 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, width, height);
+        
+        // Apply Scan Effect (Grayscale + High Contrast)
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Grayscale
+          let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+          
+          // High Contrast
+          const contrast = 1.8; // Increased for better scan look
+          gray = (gray - 120) * contrast + 128; // Slightly brighter center
+          
+          // Clamp values
+          gray = Math.max(0, Math.min(255, gray));
+          
+          data[i] = gray;
+          data[i + 1] = gray;
+          data[i + 2] = gray;
+        }
+        ctx.putImageData(imageData, 0, 0);
+
         // Compress with 0.7 quality
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         setCapturedImages(prev => [...prev, dataUrl]);
-        toast.success(`Foto ke-${capturedImages.length + 1} berhasil diambil`);
+        toast.success(`Foto ke-${capturedImages.length + 1} berhasil diambil (Scan Mode)`);
       }
     }
   };
