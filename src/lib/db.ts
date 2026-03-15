@@ -9,6 +9,11 @@ import { User, Post, Comment, Story, Candidate, LeaderboardEntry, Conversation, 
  * @returns A Blob URL representing the reassembled file
  */
 export async function getFileFromChunks(fileId: string): Promise<string | null> {
+  const data = await getFileDataFromChunks(fileId);
+  return data ? data.url : null;
+}
+
+export async function getFileDataFromChunks(fileId: string): Promise<{ url: string, type: string } | null> {
   if (!fileId) return null;
   try {
     const metadataSnap = await getDoc(doc(db, "file_metadata", fileId));
@@ -45,9 +50,9 @@ export async function getFileFromChunks(fileId: string): Promise<string | null> 
       });
 
       const fileBlob = new Blob(byteArrays, { type: type || 'application/octet-stream' });
-      return URL.createObjectURL(fileBlob);
+      return { url: URL.createObjectURL(fileBlob), type: type || 'application/octet-stream' };
     } catch (err) {
-      console.error(`Error decoding base64 in getFileFromChunks for file ${fileId}:`, err);
+      console.error(`Error decoding base64 in getFileDataFromChunks for file ${fileId}:`, err);
       return null;
     }
   } catch (err) {

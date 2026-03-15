@@ -203,35 +203,23 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       if (ctx) {
         ctx.drawImage(video, 0, 0, width, height);
         
-        // Apply Scan Effect (Grayscale + High Contrast)
+        // Apply Professional Color Scan Effect (Enhanced Color Contrast)
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         
+        const contrast = 1.2; // Moderate contrast boost to make colors pop
         for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          
-          // Grayscale
-          let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-          
-          // High Contrast
-          const contrast = 1.8; // Increased for better scan look
-          gray = (gray - 120) * contrast + 128; // Slightly brighter center
-          
-          // Clamp values
-          gray = Math.max(0, Math.min(255, gray));
-          
-          data[i] = gray;
-          data[i + 1] = gray;
-          data[i + 2] = gray;
+          // Apply contrast to R, G, B channels individually
+          data[i] = Math.max(0, Math.min(255, (data[i] - 128) * contrast + 128));
+          data[i + 1] = Math.max(0, Math.min(255, (data[i + 1] - 128) * contrast + 128));
+          data[i + 2] = Math.max(0, Math.min(255, (data[i + 2] - 128) * contrast + 128));
         }
         ctx.putImageData(imageData, 0, 0);
 
-        // Compress with 0.7 quality
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        // Compress with 0.8 quality for better color retention
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         setCapturedImages(prev => [...prev, dataUrl]);
-        toast.success(`Foto ke-${capturedImages.length + 1} berhasil diambil (Scan Mode)`);
+        toast.success(`Foto ke-${capturedImages.length + 1} berhasil diambil (Color Scan Mode)`);
       }
     }
   };
