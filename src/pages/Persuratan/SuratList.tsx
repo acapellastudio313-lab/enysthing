@@ -46,6 +46,8 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
   const location = useLocation();
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -192,7 +194,7 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
           type: item.type,
           tanggal: now.toISOString().split('T')[0],
           nomor_dokumen: item.nomor,
-          file_url: item.file_url || '',
+          file_data: item.file_data || '',
           surat_id: item.id,
           createdAt: serverTimestamp()
         });
@@ -249,6 +251,16 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
     });
   };
 
+  const filteredSurat = surat.filter(item => {
+    const matchesSearch = item.nomor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          item.perihal.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (type === 'masuk' ? item.pengirim.toLowerCase().includes(searchTerm.toLowerCase()) : item.tujuan.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesFilter = filter === 'all' || item.status === filter;
+    
+    return matchesSearch && matchesFilter;
+  });
+
   return (
     <div className="space-y-6">
       {/* Search & Filter */}
@@ -257,18 +269,28 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input 
             placeholder="Cari nomor surat, perihal, atau pengirim..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 shadow-sm"
           />
         </div>
         <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
           <Filter className="w-5 h-5" />
-          Filter
+          <select 
+            className="bg-transparent outline-none"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="all">Semua Status</option>
+            <option value="approved">Disetujui</option>
+            <option value="pending">Menunggu</option>
+          </select>
         </button>
       </div>
 
       {/* List */}
       <div className="grid grid-cols-1 gap-4">
-        {surat.map((item) => (
+        {filteredSurat.map((item) => (
           <div 
             key={item.id}
             onClick={() => { setSelectedSurat(item); setShowDetailModal(true); }}
@@ -313,10 +335,10 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
                 <span className="text-xs text-slate-500 font-medium">Petugas: {item.authorName}</span>
               </div>
               <div className="flex items-center gap-2">
-                {item.file_url && (
+                {item.file_data && (
                   <div className="flex items-center gap-1 mr-2" onClick={e => e.stopPropagation()}>
                     <a 
-                      href={item.file_url} 
+                      href={item.file_data} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors"
@@ -431,10 +453,10 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
 
                 <div className="pt-4 border-t border-slate-100">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Dokumen Lampiran</label>
-                  {selectedSurat.file_url ? (
+                  {selectedSurat.file_data ? (
                     <div className="flex items-center gap-3">
                       <a 
-                        href={selectedSurat.file_url} 
+                        href={selectedSurat.file_data} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
@@ -443,8 +465,8 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
                         Lihat Dokumen
                       </a>
                       <a 
-                        href={selectedSurat.file_url} 
-                        download
+                        href={selectedSurat.file_data} 
+                        download="lampiran_surat.pdf"
                         className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"
                       >
                         <Download className="w-5 h-5" />

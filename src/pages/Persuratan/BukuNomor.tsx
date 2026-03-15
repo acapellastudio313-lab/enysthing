@@ -61,6 +61,7 @@ export default function BukuNomor({ user }: { user: User }) {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
   const [selectedEntry, setSelectedEntry] = useState<BukuEntry | null>(null);
   const [showDetailEntryModal, setShowDetailEntryModal] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -201,11 +202,29 @@ export default function BukuNomor({ user }: { user: User }) {
     });
   };
 
-  const filteredEntries = entries.filter(e => 
-    e.type === activeType &&
-    (e.nomor_full.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     e.perihal.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredEntries = entries.filter(e => {
+    const matchesType = e.type === activeType;
+    const matchesSearch = e.nomor_full.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          e.perihal.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    let matchesFilter = true;
+    const entryDate = new Date(e.tanggal);
+    const today = new Date();
+    
+    if (filter === 'today') {
+      matchesFilter = e.tanggal === today.toISOString().split('T')[0];
+    } else if (filter === '7days') {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      matchesFilter = entryDate >= sevenDaysAgo;
+    } else if (filter === 'month') {
+      matchesFilter = entryDate.getMonth() === today.getMonth() && entryDate.getFullYear() === today.getFullYear();
+    } else if (filter === 'year') {
+      matchesFilter = entryDate.getFullYear() === today.getFullYear();
+    }
+    
+    return matchesType && matchesSearch && matchesFilter;
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -298,10 +317,19 @@ export default function BukuNomor({ user }: { user: User }) {
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500"
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
+          <div className="flex items-center gap-2">
+            <select 
+              className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            >
+              <option value="all">Semua Waktu</option>
+              <option value="today">Hari Ini</option>
+              <option value="7days">7 Hari Terakhir</option>
+              <option value="month">Bulan Ini</option>
+              <option value="year">Tahun Ini</option>
+            </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -309,7 +337,8 @@ export default function BukuNomor({ user }: { user: User }) {
             <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-widest">
               <tr>
                 <th className="px-6 py-5">Nomor Urut / Full</th>
-                <th className="px-6 py-5">Nomor Dokumen</th>
+                <th className="px-6 py-5">Nomor Dokumen (File Upload)</th>
+                <th className="px-6 py-5">Kode Klasifikasi</th>
                 <th className="px-6 py-5">Tanggal</th>
                 <th className="px-6 py-5">Perihal</th>
                 <th className="px-6 py-5">Tujuan</th>
@@ -341,6 +370,9 @@ export default function BukuNomor({ user }: { user: User }) {
                   </td>
                   <td className="px-6 py-5">
                     <span className="text-xs font-mono font-bold text-slate-600 whitespace-nowrap bg-slate-100 px-2 py-1 rounded-md">{entry.nomor_dokumen || '-'}</span>
+                  </td>
+                  <td className="px-6 py-5">
+                    <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">{entry.kode_klasifikasi || '-'}</span>
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-600 whitespace-nowrap">
@@ -393,13 +425,29 @@ export default function BukuNomor({ user }: { user: User }) {
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
+                      {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
+                        <>
+                          <button 
+                            onClick={() => { /* Handle Edit */ }}
+                            className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-all"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => { /* Handle Delete */ }}
+                            className="p-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
               {filteredEntries.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <AlertCircle className="w-8 h-8 text-slate-200" />
                       <p className="text-sm text-slate-400 font-medium">Belum ada nomor yang diambil untuk {activeType}</p>
@@ -650,10 +698,10 @@ export default function BukuNomor({ user }: { user: User }) {
                 </div>
               </div>
 
-              {selectedEntry.file_url && (
+              {selectedEntry.file_data && (
                 <div className="pt-4 border-t border-slate-100">
                   <a 
-                    href={selectedEntry.file_url} 
+                    href={selectedEntry.file_data} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
