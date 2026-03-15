@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Pimpinan, BukuEntry } from '../../types';
-import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare } from 'lucide-react';
+import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare, Eye, FileText } from 'lucide-react';
 import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where, arrayUnion } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { toast } from 'sonner';
@@ -145,7 +145,9 @@ export default function BukuNomor({ user }: { user: User }) {
         toast.success('Entry berhasil diperbarui');
       } else {
         await runTransaction(db, async (transaction) => {
-          const counterId = `surat_${activeType}_${new Date(formData.tanggal).getFullYear()}`;
+          // Use year from the form date for the counter
+          const yearFromForm = new Date(formData.tanggal).getFullYear();
+          const counterId = `surat_${activeType}_${yearFromForm}`;
           const counterRef = doc(db, 'counters', counterId);
           const counterDoc = await transaction.get(counterRef);
           
@@ -165,6 +167,7 @@ export default function BukuNomor({ user }: { user: User }) {
           transaction.set(newEntryRef, {
             nomor_urut: nextNumber,
             nomor_full: fullNumber,
+            nomor_dokumen: fullNumber, // Default to full number if not linked to a document yet
             kode_klasifikasi: formData.kode_klasifikasi,
             perihal: formData.perihal,
             tujuan: formData.tujuan,
@@ -458,14 +461,14 @@ export default function BukuNomor({ user }: { user: User }) {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
               <tr>
                 <th className="px-6 py-5">Nomor Urut</th>
                 <th className="px-6 py-5">Nomor Dokumen</th>
-                <th className="px-6 py-5">Kode Klasifikasi</th>
+                <th className="px-6 py-5">Klasifikasi</th>
                 <th className="px-6 py-5">Tanggal</th>
                 <th className="px-6 py-5">Perihal</th>
-                <th className="px-6 py-5">Tujuan</th>
+                <th className="px-6 py-5">Tujuan/Pengirim</th>
                 <th className="px-6 py-5">Petugas</th>
                 <th className="px-6 py-5">Status</th>
                 <th className="px-6 py-5 text-right">Aksi</th>
@@ -481,10 +484,14 @@ export default function BukuNomor({ user }: { user: User }) {
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-1">
                       <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">#{entry.nomor_urut}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{entry.type}</span>
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <span className="text-xs font-mono font-bold text-slate-600 whitespace-nowrap bg-slate-100 px-2 py-1 rounded-md">{entry.nomor_full || '-'}</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-mono font-bold text-emerald-600 whitespace-nowrap bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">{entry.nomor_full || '-'}</span>
+                      <span className="text-[10px] text-slate-400 font-bold">Dok: {entry.nomor_dokumen || '-'}</span>
+                    </div>
                   </td>
                   <td className="px-6 py-5">
                     <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">{entry.kode_klasifikasi || '-'}</span>
@@ -496,10 +503,10 @@ export default function BukuNomor({ user }: { user: User }) {
                     </div>
                   </td>
                   <td className="px-6 py-5 min-w-[250px]">
-                    <p className="text-sm font-bold text-slate-800 leading-snug">{entry.perihal}</p>
+                    <p className="text-sm font-bold text-slate-800 leading-snug line-clamp-2">{entry.perihal}</p>
                   </td>
                   <td className="px-6 py-5">
-                    <p className="text-xs font-bold text-slate-600 bg-blue-50 text-blue-700 px-2 py-1 rounded-md inline-block">{entry.tujuan}</p>
+                    <p className="text-xs font-bold text-slate-600 bg-blue-50 text-blue-700 px-2 py-1 rounded-md inline-block max-w-[150px] truncate">{entry.tujuan}</p>
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-2 whitespace-nowrap">
@@ -520,52 +527,59 @@ export default function BukuNomor({ user }: { user: User }) {
                     </span>
                   </td>
                   <td className="px-6 py-5 text-right" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-2">
-                      {entry.file_url && (
-                        <>
-                          <a 
-                            href={entry.file_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 hover:shadow-sm rounded-xl transition-all"
-                            title="Lihat Dokumen"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        </>
-                      )}
-                      <button 
-                        onClick={() => { setSelectedEntry(entry); setShowDetailEntryModal(true); }}
-                        className="p-2.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl transition-all shadow-sm"
-                      >
-                        <ChevronRight className="w-4 h-4" />
+                    <div className="relative group/menu inline-block">
+                      <button className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition-all shadow-sm flex items-center gap-2">
+                        <Settings className="w-4 h-4" />
+                        <span className="text-xs font-bold">Opsi</span>
                       </button>
-                      {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
-                        <>
+                      
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-10 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all transform origin-top-right scale-95 group-hover/menu:scale-100">
+                        <button 
+                          onClick={() => { setSelectedEntry(entry); setShowDetailEntryModal(true); }}
+                          className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3"
+                        >
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
+                          Detail Entry
+                        </button>
+                        {entry.file_data && (
                           <button 
-                            onClick={() => {
-                              setSelectedEntry(entry);
-                              setShowDisposisiModal(true);
-                            }}
-                            className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all"
-                            title="Disposisi"
+                            onClick={() => setSelectedFileForPreview(entry.file_data || null)}
+                            className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3"
                           >
-                            <MessageSquare className="w-4 h-4" />
+                            <Eye className="w-4 h-4 text-slate-400" />
+                            Lihat Dokumen
                           </button>
-                          <button 
-                            onClick={() => handleEdit(entry)}
-                            className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-all"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(entry.id)}
-                            className="p-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
+                        )}
+                        {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
+                          <>
+                            <div className="h-px bg-slate-100 my-1" />
+                            <button 
+                              onClick={() => {
+                                setSelectedEntry(entry);
+                                setShowDisposisiModal(true);
+                              }}
+                              className="w-full px-4 py-2 text-left text-xs font-bold text-emerald-600 hover:bg-emerald-50 flex items-center gap-3"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                              Disposisi
+                            </button>
+                            <button 
+                              onClick={() => handleEdit(entry)}
+                              className="w-full px-4 py-2 text-left text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-3"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              Edit Data
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(entry.id)}
+                              className="w-full px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-3"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Hapus Entry
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -907,40 +921,40 @@ export default function BukuNomor({ user }: { user: User }) {
 
       {/* File Preview Modal */}
       {selectedFileForPreview && (
-        <div className="fixed inset-0 bg-black/90 z-[300] flex flex-col p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-white font-bold">Pratinjau Dokumen</h3>
-            <button 
-              onClick={() => setSelectedFileForPreview(null)}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-            >
-              <XCircle className="w-6 h-6" />
-            </button>
-          </div>
-          <div className="flex-1 bg-white rounded-2xl overflow-hidden relative">
-            {selectedFileForPreview.startsWith('data:application/pdf') ? (
-              <iframe 
-                src={selectedFileForPreview} 
-                className="w-full h-full border-none"
-                title="PDF Preview"
-              />
-            ) : (
-              <div className="w-full h-full overflow-auto flex items-center justify-center bg-slate-100 p-4">
-                <img 
-                  src={selectedFileForPreview} 
-                  alt="Preview" 
-                  className="max-w-full h-auto shadow-lg rounded-lg"
-                  referrerPolicy="no-referrer"
-                />
+        <div className="fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-xl">
+                  <FileText className="w-5 h-5 text-emerald-600" />
+                </div>
+                <h3 className="font-bold text-slate-900">Pratinjau Dokumen</h3>
               </div>
-            )}
+              <button onClick={() => setSelectedFileForPreview(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <XCircle className="w-6 h-6 text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 bg-slate-100 relative overflow-hidden">
+              {selectedFileForPreview.startsWith('data:application/pdf') ? (
+                <iframe src={selectedFileForPreview} className="w-full h-full border-none" title="Preview PDF" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                  <img 
+                    src={selectedFileForPreview} 
+                    alt="Preview" 
+                    className="max-w-full max-h-full object-contain shadow-lg rounded-lg" 
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* Confirmation Modal */}
       {confirmDialog.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[700] p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
             <p className="text-slate-600 mb-6">{confirmDialog.message}</p>

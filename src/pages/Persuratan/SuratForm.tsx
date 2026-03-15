@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Pimpinan } from '../../types';
-import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool, Eye, Clock, CheckCircle2, X } from 'lucide-react';
+import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool, Eye, Clock, CheckCircle2, X, Plus, Minus } from 'lucide-react';
 import SignatureModal from '../../components/SignatureModal';
 import { toast } from 'sonner';
 import { sendNotification } from '../../lib/notifications';
@@ -9,6 +9,7 @@ import { db } from '../../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { clsx } from 'clsx';
 import { toRoman } from '../../utils';
+import { jsPDF } from 'jspdf';
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -127,54 +128,51 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
     if (capturedImages.length === 0) return;
     setIsMerging(true);
     try {
-      const images = await Promise.all(capturedImages.map(src => {
-        return new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.src = src;
-        });
-      }));
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
-      const totalHeight = images.reduce((sum, img) => sum + img.height, 0);
-      const maxWidth = Math.max(...images.map(img => img.width));
-
-      const canvas = document.createElement('canvas');
-      canvas.width = maxWidth;
-      canvas.height = totalHeight;
-      const ctx = canvas.getContext('2d');
-
-      if (ctx) {
-        let currentY = 0;
-        images.forEach(img => {
-          ctx.drawImage(img, 0, currentY);
-          currentY += img.height;
+      for (let i = 0; i < capturedImages.length; i++) {
+        const imgData = capturedImages[i];
+        if (i > 0) pdf.addPage();
+        
+        // Add image to PDF, scaling to fit page while maintaining aspect ratio
+        const img = await new Promise<HTMLImageElement>((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.src = imgData;
         });
 
-        const mergedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        
-        // Check size
-        const sizeInBytes = Math.round((mergedDataUrl.length * 3) / 4);
-        if (sizeInBytes > 1536 * 1024) {
-          toast.error('Hasil gabungan foto terlalu besar (> 1.5MB). Coba ambil lebih sedikit foto.');
-          setIsMerging(false);
-          return;
-        }
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+        const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+        const width = imgWidth * ratio;
+        const height = imgHeight * ratio;
+        const x = (pageWidth - width) / 2;
+        const y = (pageHeight - height) / 2;
 
-        // Create a File object from the data URL to reuse processFile
-        const res = await fetch(mergedDataUrl);
-        const blob = await res.blob();
-        const mergedFile = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-        
-        setFile(mergedFile);
-        stopCamera();
-        setCapturedImages([]);
-        
-        // Process with AI
-        await processFile(mergedFile);
+        pdf.addImage(imgData, 'JPEG', x, y, width, height);
       }
+
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], `camera_scan_${Date.now()}.pdf`, { type: 'application/pdf' });
+      
+      // Check size (Base64 will be ~33% larger)
+      if (pdfBlob.size > 1536 * 1024) {
+        toast.error('Hasil scan PDF terlalu besar (> 1.5MB). Coba ambil lebih sedikit foto atau kurangi kualitas.');
+        setIsMerging(false);
+        return;
+      }
+
+      setFile(pdfFile);
+      stopCamera();
+      setCapturedImages([]);
+      
+      // Process with AI
+      await processFile(pdfFile);
     } catch (err) {
       console.error(err);
-      toast.error('Gagal menggabungkan foto');
+      toast.error('Gagal membuat PDF dari foto');
     } finally {
       setIsMerging(false);
     }
@@ -240,6 +238,16 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           // Default date to today if not found
           if (!extracted.tanggal) {
             extracted.tanggal = new Date().toISOString().split('T')[0];
+          } else {
+            // Ensure date is in YYYY-MM-DD format for input[type="date"]
+            try {
+              const d = new Date(extracted.tanggal);
+              if (!isNaN(d.getTime())) {
+                extracted.tanggal = d.toISOString().split('T')[0];
+              }
+            } catch (e) {
+              extracted.tanggal = new Date().toISOString().split('T')[0];
+            }
           }
           setResult(extracted);
           toast.success('AI berhasil memproses surat');
@@ -298,7 +306,8 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
         let nextNumber = initialData?.nomor_urut || 0;
 
         if (!initialData) {
-          const counterId = `surat_${type}_${new Date().getFullYear()}`;
+          const yearFromForm = new Date(result.tanggal || new Date()).getFullYear();
+          const counterId = `surat_${type}_${yearFromForm}`;
           const counterRef = doc(db, 'counters', counterId);
           const counterSnap = await transaction.get(counterRef);
           
@@ -459,16 +468,32 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
 
       {/* Preview Modal */}
       {previewFile && (
-        <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl h-[80vh] rounded-2xl overflow-hidden flex flex-col">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-bold">Preview Dokumen</h3>
-              <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-100 rounded-full">
-                <XCircle className="w-6 h-6" />
+        <div className="fixed inset-0 bg-black/90 z-[500] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-xl">
+                  <FileText className="w-5 h-5 text-emerald-600" />
+                </div>
+                <h3 className="font-bold text-slate-900">Pratinjau Dokumen</h3>
+              </div>
+              <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X className="w-6 h-6 text-slate-500" />
               </button>
             </div>
-            <div className="flex-1 overflow-auto">
-              <iframe src={previewFile} className="w-full h-full" title="Preview" />
+            <div className="flex-1 bg-slate-100 relative overflow-hidden">
+              {previewFile.startsWith('data:application/pdf') || previewFile.endsWith('.pdf') ? (
+                <iframe src={previewFile} className="w-full h-full border-none" title="Preview PDF" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                  <img 
+                    src={previewFile} 
+                    alt="Preview" 
+                    className="max-w-full max-h-full object-contain shadow-lg rounded-lg" 
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -591,7 +616,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       )}
       {/* Camera Modal */}
       {showCamera && (
-        <div className="fixed inset-0 bg-black z-[300] flex flex-col">
+        <div className="fixed inset-0 bg-black z-[1000] flex flex-col">
           <div className="p-4 flex justify-between items-center bg-black/50 backdrop-blur-md">
             <div className="text-white">
               <h3 className="font-bold">Kamera Dokumen</h3>

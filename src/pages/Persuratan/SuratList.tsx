@@ -181,7 +181,8 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
     setProcessingId(item.id);
     try {
       await runTransaction(db, async (transaction) => {
-        const year = new Date().getFullYear();
+        // Use year from the surat date for the counter
+        const year = new Date(item.tanggal).getFullYear();
         const counterId = `surat_${item.type}_${year}`;
         const counterRef = doc(db, 'counters', counterId);
         const counterDoc = await transaction.get(counterRef);
@@ -191,7 +192,7 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
           nextNumber = counterDoc.data().current + 1;
         }
 
-        const now = new Date();
+        const now = new Date(item.tanggal);
         const romanMonth = toRoman(now.getMonth() + 1);
         const fullNumber = `${String(nextNumber).padStart(3, '0')}/${item.klasifikasi}/${romanMonth}/${year}`;
 
@@ -205,7 +206,7 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
           petugas: user.name,
           status: 'Digunakan',
           type: item.type,
-          tanggal: now.toISOString().split('T')[0],
+          tanggal: item.tanggal,
           nomor_dokumen: item.nomor,
           file_data: item.file_data || '',
           surat_id: item.id,
@@ -493,16 +494,32 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
 
               {/* Preview Modal */}
               {previewFile && (
-                <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-4">
-                  <div className="bg-white w-full max-w-4xl h-[80vh] rounded-2xl overflow-hidden flex flex-col">
-                    <div className="p-4 border-b flex justify-between items-center">
-                      <h3 className="font-bold">Preview Dokumen</h3>
-                      <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-100 rounded-full">
-                        <XCircle className="w-6 h-6" />
+                <div className="fixed inset-0 bg-black/90 z-[600] flex items-center justify-center p-4">
+                  <div className="bg-white w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+                    <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-100 rounded-xl">
+                          <FileText className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <h3 className="font-bold text-slate-900">Pratinjau Dokumen</h3>
+                      </div>
+                      <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                        <XCircle className="w-6 h-6 text-slate-500" />
                       </button>
                     </div>
-                    <div className="flex-1 overflow-auto">
-                      <iframe src={previewFile} className="w-full h-full" title="Preview" />
+                    <div className="flex-1 bg-slate-100 relative overflow-hidden">
+                      {previewFile.startsWith('data:application/pdf') ? (
+                        <iframe src={previewFile} className="w-full h-full border-none" title="Preview PDF" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                          <img 
+                            src={previewFile} 
+                            alt="Preview" 
+                            className="max-w-full max-h-full object-contain shadow-lg rounded-lg" 
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -700,7 +717,7 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
 
       {/* Confirmation Modal */}
       {confirmDialog.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[700] p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
             <p className="text-slate-600 mb-6">{confirmDialog.message}</p>

@@ -135,8 +135,10 @@ export default function Persuratan({ user }: { user: User }) {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8">
-        {renderContent()}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1600px] mx-auto p-4 md:p-8">
+          {renderContent()}
+        </div>
       </div>
 
       {/* Mobile Overlay */}
