@@ -222,4 +222,5 @@ export interface BukuEntry {
   file_url?: string;
   file_data?: string;
   createdAt: any;
+  surat_id?: string;
 }

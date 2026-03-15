@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Pimpinan } from '../../types';
-import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool, Eye } from 'lucide-react';
+import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool, Eye, Clock, CheckCircle2, X } from 'lucide-react';
 import SignatureModal from '../../components/SignatureModal';
 import { toast } from 'sonner';
 import { sendNotification } from '../../lib/notifications';
@@ -62,6 +62,11 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
   const [file, setFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [isMerging, setIsMerging] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [result, setResult] = useState<any>(initialData || null);
   const [pimpinanList, setPimpinanList] = useState<Pimpinan[]>([]);
@@ -79,13 +84,109 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
     return () => unsubscribe();
   }, []);
 
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setShowCamera(true);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal mengakses kamera');
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setCapturedImages(prev => [...prev, dataUrl]);
+        toast.success(`Foto ke-${capturedImages.length + 1} berhasil diambil`);
+      }
+    }
+  };
+
+  const mergeAndSavePhotos = async () => {
+    if (capturedImages.length === 0) return;
+    setIsMerging(true);
+    try {
+      const images = await Promise.all(capturedImages.map(src => {
+        return new Promise<HTMLImageElement>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.src = src;
+        });
+      }));
+
+      const totalHeight = images.reduce((sum, img) => sum + img.height, 0);
+      const maxWidth = Math.max(...images.map(img => img.width));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = maxWidth;
+      canvas.height = totalHeight;
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        let currentY = 0;
+        images.forEach(img => {
+          ctx.drawImage(img, 0, currentY);
+          currentY += img.height;
+        });
+
+        const mergedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        
+        // Check size
+        const sizeInBytes = Math.round((mergedDataUrl.length * 3) / 4);
+        if (sizeInBytes > 1536 * 1024) {
+          toast.error('Hasil gabungan foto terlalu besar (> 1.5MB). Coba ambil lebih sedikit foto.');
+          setIsMerging(false);
+          return;
+        }
+
+        // Create a File object from the data URL to reuse processFile
+        const res = await fetch(mergedDataUrl);
+        const blob = await res.blob();
+        const mergedFile = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        
+        setFile(mergedFile);
+        stopCamera();
+        setCapturedImages([]);
+        
+        // Process with AI
+        await processFile(mergedFile);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menggabungkan foto');
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       
-      // Limit to 500KB to be safe within Firestore limits (Base64 encoding increases size)
-      if (selectedFile.size > 500 * 1024) {
-        toast.error('Ukuran file terlalu besar. Maksimal 500KB.');
+      // Limit to 1.5MB to be safe within Firestore limits (Base64 encoding increases size)
+      if (selectedFile.size > 1536 * 1024) {
+        toast.error('Ukuran file terlalu besar. Maksimal 1.5MB.');
         return;
       }
 
@@ -297,7 +398,8 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <button 
-            onClick={() => fileInputRef.current?.click()}
+            type="button"
+            onClick={startCamera}
             className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-slate-200 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group"
           >
             <div className="p-4 bg-slate-50 rounded-full group-hover:bg-emerald-100 transition-colors">
@@ -305,11 +407,12 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
             </div>
             <div className="text-center">
               <span className="block font-bold text-slate-700">Scan Kamera</span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider">Gunakan Mobile/Webcam</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider">Multi-foto (Maks 1.5MB)</span>
             </div>
           </button>
           
           <button 
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-slate-200 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group"
           >
@@ -318,7 +421,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
             </div>
             <div className="text-center">
               <span className="block font-bold text-slate-700">Unggah File</span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider">PDF, JPG, PNG</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider">PDF, JPG, PNG (Maks 1.5MB)</span>
             </div>
           </button>
           <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,.pdf" />
@@ -339,7 +442,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
               </div>
               <div>
                 <p className="font-bold text-slate-900 text-sm">{file.name}</p>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">{(file.size / 1024).toFixed(2)} KB</p>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">{(file.size / 1024).toFixed(2)} KB / 1536 KB</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -484,6 +587,68 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
               <span>{isSaving ? 'Menyimpan...' : isExtracting ? 'Menunggu AI...' : 'Simpan & Teruskan ke Buku Nomor'}</span>
             </div>
           </button>
+        </div>
+      )}
+      {/* Camera Modal */}
+      {showCamera && (
+        <div className="fixed inset-0 bg-black z-[300] flex flex-col">
+          <div className="p-4 flex justify-between items-center bg-black/50 backdrop-blur-md">
+            <div className="text-white">
+              <h3 className="font-bold">Kamera Dokumen</h3>
+              <p className="text-xs opacity-70">{capturedImages.length} foto diambil</p>
+            </div>
+            <button 
+              onClick={stopCamera}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            
+            {/* Captured Thumbnails */}
+            <div className="absolute bottom-24 left-0 right-0 flex justify-center gap-2 p-4 overflow-x-auto">
+              {capturedImages.map((img, i) => (
+                <div key={i} className="relative shrink-0">
+                  <img src={img} alt={`Capture ${i}`} className="w-16 h-16 object-cover rounded-lg border-2 border-white shadow-lg" />
+                  <button 
+                    onClick={() => setCapturedImages(prev => prev.filter((_, idx) => idx !== i))}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 shadow-md"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-8 bg-black/50 backdrop-blur-md flex items-center justify-around">
+            <div className="w-12" /> {/* Spacer */}
+            <button 
+              onClick={capturePhoto}
+              className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 active:scale-95 transition-all flex items-center justify-center"
+            >
+              <div className="w-16 h-16 bg-white rounded-full border-2 border-slate-900" />
+            </button>
+            <button 
+              onClick={mergeAndSavePhotos}
+              disabled={capturedImages.length === 0 || isMerging}
+              className="flex flex-col items-center gap-1 text-white disabled:opacity-50"
+            >
+              <div className="p-3 bg-emerald-600 rounded-full">
+                {isMerging ? <Clock className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />}
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest">Selesai</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

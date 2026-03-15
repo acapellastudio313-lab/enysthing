@@ -1,27 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Pimpinan, BukuEntry } from '../../types';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Hash, 
-  Calendar, 
-  User as UserIcon, 
-  Tag,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  ChevronRight,
-  Copy,
-  ExternalLink,
-  Trash2,
-  Edit2,
-  Settings,
-  ArrowUpDown,
-  XCircle,
-  Download
-} from 'lucide-react';
-import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where } from 'firebase/firestore';
+import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare } from 'lucide-react';
+import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where, arrayUnion } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { toast } from 'sonner';
 import { clsx } from 'clsx';
@@ -62,6 +42,13 @@ export default function BukuNomor({ user }: { user: User }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedFileForPreview, setSelectedFileForPreview] = useState<string | null>(null);
+  const [showDisposisiModal, setShowDisposisiModal] = useState(false);
+  const [disposisiNote, setDisposisiNote] = useState('');
+  const [tagUserId, setTagUserId] = useState('');
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<BukuEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<BukuEntry | null>(null);
   const [showDetailEntryModal, setShowDetailEntryModal] = useState(false);
@@ -92,6 +79,52 @@ export default function BukuNomor({ user }: { user: User }) {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'users'),
+      where('persuratan_role', 'in', ['pimpinan', 'petugas'])
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setAvailableUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleDisposisi = async () => {
+    if (!selectedEntry || !tagUserId) {
+      toast.error('Harap pilih tujuan disposisi');
+      return;
+    }
+
+    const targetUser = availableUsers.find(u => u.id === tagUserId);
+    setIsSubmitting(true);
+    try {
+      // If linked to a surat, update the surat document too
+      if (selectedEntry.surat_id) {
+        await updateDoc(doc(db, 'surat', selectedEntry.surat_id), {
+          disposisi: arrayUnion({
+            note: disposisiNote,
+            from: user.name,
+            to: targetUser?.name || 'Unknown',
+            toId: tagUserId,
+            createdAt: new Date(),
+            signature: null
+          })
+        });
+      }
+
+      toast.success('Disposisi berhasil dikirim');
+      setShowDisposisiModal(false);
+      setDisposisiNote('');
+      setTagUserId('');
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal mengirim disposisi');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleAmbilNomor = async () => {
     if (!formData.perihal || !formData.tujuan) {
@@ -267,9 +300,28 @@ export default function BukuNomor({ user }: { user: User }) {
     } else if (filter === 'year') {
       matchesFilter = entryDate.getFullYear() === today.getFullYear();
     }
+
+    const matchesYear = selectedYear === 'all' || entryDate.getFullYear().toString() === selectedYear;
+    const matchesMonth = selectedMonth === 'all' || (entryDate.getMonth() + 1).toString() === selectedMonth;
     
-    return matchesType && matchesSearch && matchesFilter;
+    return matchesType && matchesSearch && matchesFilter && matchesYear && matchesMonth;
   });
+
+  const years = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - i).toString());
+  const months = [
+    { value: '1', label: 'Januari' },
+    { value: '2', label: 'Februari' },
+    { value: '3', label: 'Maret' },
+    { value: '4', label: 'April' },
+    { value: '5', label: 'Mei' },
+    { value: '6', label: 'Juni' },
+    { value: '7', label: 'Juli' },
+    { value: '8', label: 'Agustus' },
+    { value: '9', label: 'September' },
+    { value: '10', label: 'Oktober' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'Desember' },
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -352,7 +404,7 @@ export default function BukuNomor({ user }: { user: User }) {
 
       {/* Table Section */}
       {/* Search & Filter */}
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input 
@@ -362,20 +414,44 @@ export default function BukuNomor({ user }: { user: User }) {
             className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 shadow-sm"
           />
         </div>
-        <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
-          <Filter className="w-5 h-5" />
-          <select 
-            className="bg-transparent outline-none"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          >
-            <option value="all">Semua Waktu</option>
-            <option value="today">Hari Ini</option>
-            <option value="7days">7 Hari Terakhir</option>
-            <option value="month">Bulan Ini</option>
-            <option value="year">Tahun Ini</option>
-          </select>
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 shadow-sm">
+            <Calendar className="w-5 h-5 text-slate-400" />
+            <select 
+              className="bg-transparent outline-none text-sm"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+            >
+              <option value="all">Semua Tahun</option>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 shadow-sm">
+            <Filter className="w-5 h-5 text-slate-400" />
+            <select 
+              className="bg-transparent outline-none text-sm"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              <option value="all">Semua Bulan</option>
+              {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 shadow-sm">
+            <Clock className="w-5 h-5 text-slate-400" />
+            <select 
+              className="bg-transparent outline-none text-sm"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            >
+              <option value="all">Semua Waktu</option>
+              <option value="today">Hari Ini</option>
+              <option value="7days">7 Hari Terakhir</option>
+              <option value="month">Bulan Ini</option>
+              <option value="year">Tahun Ini</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -466,6 +542,16 @@ export default function BukuNomor({ user }: { user: User }) {
                       </button>
                       {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
                         <>
+                          <button 
+                            onClick={() => {
+                              setSelectedEntry(entry);
+                              setShowDisposisiModal(true);
+                            }}
+                            className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all"
+                            title="Disposisi"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
                           <button 
                             onClick={() => handleEdit(entry)}
                             className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-all"
@@ -739,18 +825,115 @@ export default function BukuNomor({ user }: { user: User }) {
 
               {selectedEntry.file_data && (
                 <div className="pt-4 border-t border-slate-100">
-                  <a 
-                    href={selectedEntry.file_data} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
+                  <button 
+                    onClick={() => {
+                      // Open file preview modal
+                      setSelectedFileForPreview(selectedEntry.file_data || null);
+                    }}
                     className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
                   >
                     <ExternalLink className="w-4 h-4" />
                     Buka Dokumen Terkait
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disposisi Modal */}
+      {showDisposisiModal && selectedEntry && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="font-bold text-slate-900">Disposisi Nomor Buku</h3>
+                <p className="text-xs text-slate-500">{selectedEntry.nomor_full}</p>
+              </div>
+              <button onClick={() => setShowDisposisiModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
+                <XCircle className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Instruksi / Catatan</label>
+                <textarea 
+                  value={disposisiNote}
+                  onChange={e => setDisposisiNote(e.target.value)}
+                  placeholder="Tulis instruksi disposisi di sini..."
+                  rows={4}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-emerald-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Teruskan Ke</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <select 
+                    value={tagUserId}
+                    onChange={e => setTagUserId(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-emerald-500 appearance-none font-bold"
+                  >
+                    <option value="">Pilih Petugas / Pimpinan...</option>
+                    {availableUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.persuratan_role})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 flex gap-3">
+              <button 
+                onClick={() => setShowDisposisiModal(false)}
+                className="flex-1 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDisposisi}
+                disabled={isSubmitting}
+                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Mengirim...' : 'Kirim Disposisi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* File Preview Modal */}
+      {selectedFileForPreview && (
+        <div className="fixed inset-0 bg-black/90 z-[300] flex flex-col p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-bold">Pratinjau Dokumen</h3>
+            <button 
+              onClick={() => setSelectedFileForPreview(null)}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex-1 bg-white rounded-2xl overflow-hidden relative">
+            {selectedFileForPreview.startsWith('data:application/pdf') ? (
+              <iframe 
+                src={selectedFileForPreview} 
+                className="w-full h-full border-none"
+                title="PDF Preview"
+              />
+            ) : (
+              <div className="w-full h-full overflow-auto flex items-center justify-center bg-slate-100 p-4">
+                <img 
+                  src={selectedFileForPreview} 
+                  alt="Preview" 
+                  className="max-w-full h-auto shadow-lg rounded-lg"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
