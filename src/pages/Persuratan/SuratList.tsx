@@ -33,7 +33,7 @@ import { toRoman } from '../../utils';
 import SuratForm from './SuratForm';
 import SignatureModal from '../../components/SignatureModal';
 
-export default function SuratList({ user, type }: { user: User, type: 'masuk' | 'keluar' }) {
+export default function SuratList({ user, type, suratId }: { user: User, type: 'masuk' | 'keluar', suratId?: string | null }) {
   const [surat, setSurat] = useState<Surat[]>([]);
   const [selectedSurat, setSelectedSurat] = useState<Surat | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -94,10 +94,22 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
 
   useEffect(() => {
     if (surat.length === 0) return;
-    const params = new URLSearchParams(location.search);
-    const suratId = params.get('suratId');
+    
+    // Check prop first
     if (suratId) {
       const targetSurat = surat.find(s => s.id === suratId);
+      if (targetSurat) {
+        setSelectedSurat(targetSurat);
+        setShowDetailModal(true);
+        return;
+      }
+    }
+
+    // Fallback to URL params
+    const params = new URLSearchParams(location.search);
+    const urlSuratId = params.get('suratId');
+    if (urlSuratId) {
+      const targetSurat = surat.find(s => s.id === urlSuratId);
       if (targetSurat) {
         setSelectedSurat(targetSurat);
         setShowDetailModal(true);
@@ -105,7 +117,7 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
         window.history.replaceState({}, '', window.location.pathname + '?tab=' + params.get('tab'));
       }
     }
-  }, [location.search, surat]);
+  }, [location.search, surat, suratId]);
 
   const handleDisposisi = async () => {
     if (!selectedSurat || !tagUserId) {

@@ -20,7 +20,14 @@ import BukuNomor from './BukuNomor';
 import PersuratanAdmin from './PersuratanAdmin';
 
 export default function Persuratan({ user }: { user: User }) {
-  const [activeSubTab, setActiveSubTab] = useState('persuratan_dashboard');
+  const setActiveSubTab = (tab: string, suratId?: string) => {
+    setActiveSubTabState(tab);
+    if (suratId) {
+      setActiveSuratId(suratId);
+    }
+  };
+  const [activeSubTab, setActiveSubTabState] = useState('persuratan_dashboard');
+  const [activeSuratId, setActiveSuratId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
 
@@ -61,8 +68,8 @@ export default function Persuratan({ user }: { user: User }) {
 
     switch (activeSubTab) {
       case 'persuratan_dashboard': return <PersuratanDashboard user={user} onNavigate={setActiveSubTab} />;
-      case 'persuratan_surat_masuk': return <SuratMasuk user={user} />;
-      case 'persuratan_surat_keluar': return <SuratKeluar user={user} />;
+      case 'persuratan_surat_masuk': return <SuratMasuk user={user} suratId={activeSuratId} />;
+      case 'persuratan_surat_keluar': return <SuratKeluar user={user} suratId={activeSuratId} />;
       case 'persuratan_buku_nomor': return <BukuNomor user={user} />;
       case 'persuratan_manajemen_user': return <PersuratanAdmin user={user} />;
       default: return <PersuratanDashboard user={user} onNavigate={setActiveSubTab} />;

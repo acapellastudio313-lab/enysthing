@@ -81,6 +81,13 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
+      
+      // Limit to 500KB to be safe within Firestore limits (Base64 encoding increases size)
+      if (selectedFile.size > 500 * 1024) {
+        toast.error('Ukuran file terlalu besar. Maksimal 500KB.');
+        return;
+      }
+
       setFile(selectedFile);
       await processFile(selectedFile);
     }

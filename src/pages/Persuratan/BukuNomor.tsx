@@ -63,6 +63,7 @@ export default function BukuNomor({ user }: { user: User }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
   const [selectedEntry, setSelectedEntry] = useState<BukuEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<BukuEntry | null>(null);
   const [showDetailEntryModal, setShowDetailEntryModal] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -100,44 +101,55 @@ export default function BukuNomor({ user }: { user: User }) {
 
     setIsSubmitting(true);
     try {
-      await runTransaction(db, async (transaction) => {
-        const counterId = `surat_${activeType}_${new Date(formData.tanggal).getFullYear()}`;
-        const counterRef = doc(db, 'counters', counterId);
-        const counterDoc = await transaction.get(counterRef);
-        
-        let nextNumber = 1;
-        if (counterDoc.exists()) {
-          nextNumber = counterDoc.data().current + 1;
-        }
-
-        const now = new Date(formData.tanggal);
-        const romanMonth = toRoman(now.getMonth() + 1);
-        const year = now.getFullYear();
-        const fullNumber = `${String(nextNumber).padStart(3, '0')}/${formData.kode_klasifikasi}/${romanMonth}/${year}`;
-
-        const pimpinan = pimpinanList.find(p => p.id === formData.pimpinan_id);
-
-        const newEntryRef = doc(collection(db, 'buku_kendali'));
-        transaction.set(newEntryRef, {
-          nomor_urut: nextNumber,
-          nomor_full: fullNumber,
+      if (editingEntry) {
+        await updateDoc(doc(db, 'buku_kendali', editingEntry.id), {
           kode_klasifikasi: formData.kode_klasifikasi,
           perihal: formData.perihal,
           tujuan: formData.tujuan,
-          petugas: user.name,
-          pimpinan: pimpinan?.nama || '',
           pimpinan_id: formData.pimpinan_id,
-          status: 'Draft',
-          type: activeType,
-          tanggal: formData.tanggal,
-          createdAt: serverTimestamp()
+          tanggal: formData.tanggal
         });
+        toast.success('Entry berhasil diperbarui');
+      } else {
+        await runTransaction(db, async (transaction) => {
+          const counterId = `surat_${activeType}_${new Date(formData.tanggal).getFullYear()}`;
+          const counterRef = doc(db, 'counters', counterId);
+          const counterDoc = await transaction.get(counterRef);
+          
+          let nextNumber = 1;
+          if (counterDoc.exists()) {
+            nextNumber = counterDoc.data().current + 1;
+          }
 
-        transaction.set(counterRef, { current: nextNumber }, { merge: true });
-      });
+          const now = new Date(formData.tanggal);
+          const romanMonth = toRoman(now.getMonth() + 1);
+          const year = now.getFullYear();
+          const fullNumber = `${String(nextNumber).padStart(3, '0')}/${formData.kode_klasifikasi}/${romanMonth}/${year}`;
 
-      toast.success('Nomor surat berhasil diambil');
+          const pimpinan = pimpinanList.find(p => p.id === formData.pimpinan_id);
+
+          const newEntryRef = doc(collection(db, 'buku_kendali'));
+          transaction.set(newEntryRef, {
+            nomor_urut: nextNumber,
+            nomor_full: fullNumber,
+            kode_klasifikasi: formData.kode_klasifikasi,
+            perihal: formData.perihal,
+            tujuan: formData.tujuan,
+            petugas: user.name,
+            pimpinan: pimpinan?.nama || '',
+            pimpinan_id: formData.pimpinan_id,
+            status: 'Draft',
+            type: activeType,
+            tanggal: formData.tanggal,
+            createdAt: serverTimestamp()
+          });
+
+          transaction.set(counterRef, { current: nextNumber }, { merge: true });
+        });
+        toast.success('Nomor surat berhasil diambil');
+      }
       setShowAddModal(false);
+      setEditingEntry(null);
       setFormData({ 
         kode_klasifikasi: 'HK', 
         perihal: '', 
@@ -147,7 +159,7 @@ export default function BukuNomor({ user }: { user: User }) {
       });
     } catch (err) {
       console.error(err);
-      toast.error('Gagal mengambil nomor surat');
+      toast.error('Gagal memproses nomor surat');
     } finally {
       setIsSubmitting(false);
     }
@@ -184,6 +196,18 @@ export default function BukuNomor({ user }: { user: User }) {
     }
   };
 
+  const handleEdit = (entry: BukuEntry) => {
+    setEditingEntry(entry);
+    setFormData({
+      kode_klasifikasi: entry.kode_klasifikasi,
+      perihal: entry.perihal,
+      tujuan: entry.tujuan,
+      pimpinan_id: entry.pimpinan_id || '',
+      tanggal: entry.tanggal
+    });
+    setShowAddModal(true);
+  };
+
   const handleDeletePimpinan = async (id: string) => {
     setConfirmDialog({
       isOpen: true,
@@ -202,10 +226,31 @@ export default function BukuNomor({ user }: { user: User }) {
     });
   };
 
+  const handleDelete = async (id: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Entry',
+      message: 'Apakah Anda yakin ingin menghapus entry ini?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          await deleteDoc(doc(db, 'buku_kendali', id));
+          toast.success('Entry berhasil dihapus');
+        } catch (err) {
+          console.error(err);
+          toast.error('Gagal menghapus entry');
+        }
+      }
+    });
+  };
+
   const filteredEntries = entries.filter(e => {
     const matchesType = e.type === activeType;
     const matchesSearch = e.nomor_full.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          e.perihal.toLowerCase().includes(searchTerm.toLowerCase());
+                          e.perihal.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          e.tanggal.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          e.tujuan.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          e.petugas.toLowerCase().includes(searchTerm.toLowerCase());
     
     let matchesFilter = true;
     const entryDate = new Date(e.tanggal);
@@ -428,13 +473,13 @@ export default function BukuNomor({ user }: { user: User }) {
                       {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
                         <>
                           <button 
-                            onClick={() => { /* Handle Edit */ }}
+                            onClick={() => handleEdit(entry)}
                             className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-all"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={() => { /* Handle Delete */ }}
+                            onClick={() => handleDelete(entry.id)}
                             className="p-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-all"
                           >
                             <Trash2 className="w-4 h-4" />

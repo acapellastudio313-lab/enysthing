@@ -29,7 +29,7 @@ import { collection, query, onSnapshot, where, limit, orderBy } from 'firebase/f
 import { db } from '../../lib/firebase';
 import { clsx } from 'clsx';
 
-export default function PersuratanDashboard({ user, onNavigate }: { user: User, onNavigate: (tab: string) => void }) {
+export default function PersuratanDashboard({ user, onNavigate }: { user: User, onNavigate: (tab: string, suratId?: string) => void }) {
   const [stats, setStats] = useState({
     totalMasuk: 0,
     totalKeluar: 0,

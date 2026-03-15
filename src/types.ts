@@ -189,6 +189,7 @@ export interface Surat {
   createdAt: any;
   ringkasan?: string;
   file_url?: string;
+  file_data?: string;
   nomor_dokumen?: string;
   buku_nomor_id?: string;
   disposisi_selesai?: boolean;
@@ -219,5 +220,6 @@ export interface BukuEntry {
   tanggal: string;
   nomor_dokumen?: string;
   file_url?: string;
+  file_data?: string;
   createdAt: any;
 }

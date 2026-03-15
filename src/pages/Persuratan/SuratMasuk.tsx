@@ -4,7 +4,7 @@ import SuratForm from './SuratForm';
 import SuratList from './SuratList';
 import { Plus, List } from 'lucide-react';
 
-export default function SuratMasuk({ user }: { user: User }) {
+export default function SuratMasuk({ user, suratId }: { user: User, suratId?: string | null }) {
   const [view, setView] = useState<'list' | 'add'>('list');
 
   return (
@@ -31,7 +31,7 @@ export default function SuratMasuk({ user }: { user: User }) {
       </div>
 
       {view === 'list' ? (
-        <SuratList user={user} type="masuk" />
+        <SuratList user={user} type="masuk" suratId={suratId} />
       ) : (
         <SuratForm user={user} type="masuk" onSuccess={() => setView('list')} />
       )}
