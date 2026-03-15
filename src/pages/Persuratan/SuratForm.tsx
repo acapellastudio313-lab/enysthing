@@ -5,8 +5,9 @@ import SignatureModal from '../../components/SignatureModal';
 import { toast } from 'sonner';
 import { sendNotification } from '../../lib/notifications';
 import { GoogleGenAI, Type } from '@google/genai';
-import { db } from '../../lib/firebase';
+import { db, storage } from '../../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { clsx } from 'clsx';
 import { toRoman } from '../../utils';
 import { jsPDF } from 'jspdf';
@@ -87,16 +88,23 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
+      // Try environment camera, fallback to default
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: { exact: 'environment' } } 
+        });
+      } catch (e) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setShowCamera(true);
       }
     } catch (err) {
       console.error(err);
-      toast.error('Gagal mengakses kamera');
+      toast.error('Gagal mengakses kamera. Pastikan izin kamera diberikan.');
     }
   };
 
@@ -284,22 +292,17 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
 
     setIsSaving(true);
     setUploadProgress(0);
-    console.log('DEBUG: Starting saveLetter (Firestore-Only)...');
     try {
-      let fileData = initialData?.file_data || '';
+      let fileUrl = initialData?.file_data || '';
       
       if (file) {
-        console.log('DEBUG: Converting file to Base64...');
-        fileData = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = error => reject(error);
-        });
-        console.log('DEBUG: File converted to Base64');
+        console.log('DEBUG: Uploading file to Firebase Storage...');
+        const fileRef = ref(storage, `surat/${type}/${Date.now()}_${file.name}`);
+        await uploadBytes(fileRef, file);
+        fileUrl = await getDownloadURL(fileRef);
+        console.log('DEBUG: File uploaded, URL:', fileUrl);
       }
 
-      console.log('DEBUG: Starting transaction...');
       await runTransaction(db, async (transaction) => {
         let fullNumber = result.nomor;
         let bukuId = initialData?.buku_nomor_id;
@@ -338,12 +341,10 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           perihal: result.perihal,
           tujuan: type === 'keluar' ? result.tujuan : (result.pengirim || 'Kantor'),
           petugas: user.name,
-          pimpinan: pimpinan?.nama || '',
-          pimpinan_id: selectedPimpinanId || '',
           status: 'Digunakan',
           type,
           tanggal: result.tanggal,
-          file_data: fileData,
+          file_data: fileUrl,
           signature: signature,
           updatedAt: serverTimestamp()
         };
@@ -363,7 +364,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           ...result,
           nomor: fullNumber,
           nomor_dokumen: originalNomor,
-          file_data: fileData,
+          file_data: fileUrl,
           type,
           updatedAt: serverTimestamp(),
           buku_nomor_id: bukuId,
@@ -391,7 +392,6 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
       console.error('DEBUG: Error in saveLetter:', err);
       toast.error(err.message || 'Gagal menyimpan data');
     } finally {
-      console.log('DEBUG: saveLetter finished');
       setIsSaving(false);
       setUploadProgress(0);
     }
@@ -482,7 +482,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
               </button>
             </div>
             <div className="flex-1 bg-slate-100 relative overflow-hidden">
-              {previewFile.startsWith('data:application/pdf') || previewFile.endsWith('.pdf') ? (
+              {previewFile.startsWith('data:application/pdf') || previewFile.toLowerCase().includes('.pdf') ? (
                 <iframe src={previewFile} className="w-full h-full border-none" title="Preview PDF" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">

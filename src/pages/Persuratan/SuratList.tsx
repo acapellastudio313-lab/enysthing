@@ -508,7 +508,7 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                       </button>
                     </div>
                     <div className="flex-1 bg-slate-100 relative overflow-hidden">
-                      {previewFile.startsWith('data:application/pdf') ? (
+                      {(previewFile.startsWith('data:application/pdf') || previewFile.toLowerCase().includes('.pdf')) ? (
                         <iframe src={previewFile} className="w-full h-full border-none" title="Preview PDF" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
