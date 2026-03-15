@@ -7,8 +7,6 @@ import { sendNotification } from '../../lib/notifications';
 import { GoogleGenAI, Type } from '@google/genai';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc, onSnapshot, query, where } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../lib/firebase';
 import { clsx } from 'clsx';
 import { toRoman } from '../../utils';
 
@@ -17,15 +15,24 @@ let aiClient: GoogleGenAI | null = null;
 // Inisialisasi Gemini di sisi client harus dilakukan dengan hati-hati.
 // Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
 function getAi(): GoogleGenAI | null {
-  // Try to get the API key from various possible environment configurations
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  // Use VITE_GEMINI_API_KEY for Vite/Vercel production builds
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
                  
   if (!apiKey) {
-    console.warn('GEMINI_API_KEY tidak tersedia. Fitur AI dinonaktifkan.');
+    console.error('DEBUG: VITE_GEMINI_API_KEY tidak ditemukan di import.meta.env!');
+    toast.error('Fitur AI tidak tersedia: API Key tidak ditemukan. Pastikan VITE_GEMINI_API_KEY diatur di Vercel.');
     return null;
   }
+  
   if (!aiClient) {
-    aiClient = new GoogleGenAI({ apiKey });
+    try {
+      aiClient = new GoogleGenAI({ apiKey });
+      console.log('DEBUG: AI Client initialized successfully');
+    } catch (e) {
+      console.error('DEBUG: Error initializing AI Client:', e);
+      toast.error('Gagal menginisialisasi AI.');
+      return null;
+    }
   }
   return aiClient;
 }
@@ -160,37 +167,22 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
 
     setIsSaving(true);
     setUploadProgress(0);
+    console.log('DEBUG: Starting saveLetter (Firestore-Only)...');
     try {
-      let fileUrl = initialData?.file_url || '';
+      let fileData = initialData?.file_data || '';
+      
       if (file) {
-        const fileRef = ref(storage, `persuratan/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(fileRef, file);
-        
-        fileUrl = await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            uploadTask.cancel();
-            reject(new Error('Upload timeout. Silakan coba lagi.'));
-          }, 120000); // 120s timeout
-
-          uploadTask.on('state_changed', 
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
-            }, 
-            (error) => {
-              clearTimeout(timeout);
-              console.error('Storage Upload Error:', error);
-              reject(error);
-            }, 
-            async () => {
-              clearTimeout(timeout);
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            }
-          );
+        console.log('DEBUG: Converting file to Base64...');
+        fileData = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = error => reject(error);
         });
+        console.log('DEBUG: File converted to Base64');
       }
 
+      console.log('DEBUG: Starting transaction...');
       await runTransaction(db, async (transaction) => {
         let fullNumber = result.nomor;
         let bukuId = initialData?.buku_nomor_id;
@@ -233,7 +225,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           status: 'Digunakan',
           type,
           tanggal: result.tanggal,
-          file_url: fileUrl,
+          file_data: fileData,
           signature: signature,
           updatedAt: serverTimestamp()
         };
@@ -253,12 +245,12 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           ...result,
           nomor: fullNumber,
           nomor_dokumen: originalNomor,
-          file_url: fileUrl,
+          file_data: fileData,
           type,
           updatedAt: serverTimestamp(),
           buku_nomor_id: bukuId,
           signature: signature,
-          pimpinan_id: selectedPimpinanId || '' // Ensure pimpinan_id is saved
+          pimpinan_id: selectedPimpinanId || ''
         };
 
         if (!initialData) {
@@ -274,21 +266,14 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
 
       toast.success(initialData ? 'Surat berhasil diperbarui' : 'Surat dan Nomor berhasil disimpan');
       
-      if (!initialData && type === 'keluar' && selectedPimpinanId) {
-        await sendNotification(
-          selectedPimpinanId,
-          `Surat keluar baru perlu ditandatangani: ${result.perihal}`,
-          `/apps/persuratan?tab=persuratan_surat_keluar&suratId=${suratRef.id}`
-        );
-      }
-
       setFile(null);
       if (!initialData) setResult(null);
       onSuccess();
     } catch (err: any) {
-      console.error(err);
+      console.error('DEBUG: Error in saveLetter:', err);
       toast.error(err.message || 'Gagal menyimpan data');
     } finally {
+      console.log('DEBUG: saveLetter finished');
       setIsSaving(false);
       setUploadProgress(0);
     }
@@ -464,15 +449,9 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
             disabled={isSaving}
             className="w-full mt-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all flex flex-col items-center justify-center gap-1 shadow-xl shadow-slate-200 disabled:opacity-50 overflow-hidden relative"
           >
-            {isSaving && uploadProgress > 0 && uploadProgress < 100 && (
-              <div 
-                className="absolute bottom-0 left-0 h-1 bg-emerald-500 transition-all duration-300" 
-                style={{ width: `${uploadProgress}%` }}
-              />
-            )}
             <div className="flex items-center gap-3">
               {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileCheck className="w-5 h-5" />}
-              <span>{isSaving ? (uploadProgress < 100 ? `Mengunggah... ${Math.round(uploadProgress)}%` : 'Menyimpan...') : isExtracting ? 'Menunggu AI...' : 'Simpan & Teruskan ke Buku Nomor'}</span>
+              <span>{isSaving ? 'Menyimpan...' : isExtracting ? 'Menunggu AI...' : 'Simpan & Teruskan ke Buku Nomor'}</span>
             </div>
           </button>
         </div>

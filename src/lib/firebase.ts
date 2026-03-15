@@ -20,9 +20,9 @@ export const db = initializeFirestore(app, {
 });
 export const auth = getAuth(app);
 export const storage = getStorage(app);
-// Set max retry time to 1 minute (default is 10 minutes)
+// Set max retry time to 2 minutes (default is 10 minutes)
 // This helps fail faster if there's a persistent network issue
-storage.maxOperationRetryTime = 60000;
-storage.maxUploadRetryTime = 60000;
+storage.maxOperationRetryTime = 120000;
+storage.maxUploadRetryTime = 120000;
 
 export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
