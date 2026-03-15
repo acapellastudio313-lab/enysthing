@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { User, Pimpinan, BukuEntry } from '../../types';
-import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare, Eye, FileText, Camera, Upload, FileCheck } from 'lucide-react';
+import { Plus, Search, Filter, Hash, Calendar, User as UserIcon, Tag, CheckCircle2, Clock, AlertCircle, ChevronRight, Copy, ExternalLink, Trash2, Edit2, Settings, ArrowUpDown, XCircle, Download, MessageSquare, Eye, FileText, Camera, Upload, FileCheck, Sparkles } from 'lucide-react';
 import { collection, query, onSnapshot, orderBy, runTransaction, doc, serverTimestamp, addDoc, deleteDoc, updateDoc, where, arrayUnion, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { getFileFromChunks, uploadFile } from '../../lib/db';
@@ -211,7 +211,9 @@ export default function BukuNomor({ user }: { user: User }) {
           const pimpinan = pimpinanList.find(p => p.id === formData.pimpinan_id);
 
           const newEntryRef = doc(collection(db, 'buku_kendali'));
-          transaction.set(newEntryRef, {
+          const newSuratRef = doc(collection(db, 'surat'));
+
+          const entryData = {
             nomor_urut: nextNumber,
             nomor_full: fullNumber,
             nomor_dokumen: fullNumber, // Default to full number if not linked to a document yet
@@ -225,8 +227,34 @@ export default function BukuNomor({ user }: { user: User }) {
             type: activeType,
             tanggal: formData.tanggal,
             file_data: fileId,
-            createdAt: serverTimestamp()
-          });
+            source: 'manual', // Distinguish manual entry from AI
+            createdAt: serverTimestamp(),
+            surat_id: newSuratRef.id
+          };
+
+          transaction.set(newEntryRef, entryData);
+
+          // Create corresponding surat entry
+          const suratData = {
+            nomor: fullNumber,
+            nomor_dokumen: fullNumber,
+            klasifikasi: formData.kode_klasifikasi,
+            perihal: formData.perihal,
+            tujuan: activeType === 'keluar' ? formData.tujuan : '',
+            pengirim: activeType === 'masuk' ? formData.tujuan : '',
+            tanggal: formData.tanggal,
+            file_data: fileId,
+            type: activeType,
+            status: 'pending',
+            createdBy: user.id,
+            authorName: user.name,
+            createdAt: serverTimestamp(),
+            buku_nomor_id: newEntryRef.id,
+            source: 'manual', // Distinguish manual entry from AI
+            pimpinan_id: formData.pimpinan_id || ''
+          };
+
+          transaction.set(newSuratRef, suratData);
 
           transaction.set(counterRef, { current: nextNumber }, { merge: true });
         });
@@ -690,7 +718,18 @@ export default function BukuNomor({ user }: { user: User }) {
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-1">
                       <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">#{entry.nomor_urut}</span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{entry.type}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{entry.type}</span>
+                        {(entry as any).source === 'ai' ? (
+                          <span className="flex items-center gap-0.5 px-1 bg-emerald-100 text-emerald-700 rounded text-[8px] font-bold uppercase tracking-wider">
+                            <Sparkles className="w-2 h-2" /> AI
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-0.5 px-1 bg-slate-100 text-slate-600 rounded text-[8px] font-bold uppercase tracking-wider">
+                            Manual
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-5">
@@ -1056,7 +1095,18 @@ export default function BukuNomor({ user }: { user: User }) {
                   <Hash className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900">Detail Nomor Buku</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-900">Detail Nomor Buku</h3>
+                    {(selectedEntry as any).source === 'ai' ? (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        <Sparkles className="w-3 h-3" /> AI
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        Manual
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500 font-mono">{selectedEntry.nomor_full}</p>
                 </div>
               </div>
@@ -1194,9 +1244,19 @@ export default function BukuNomor({ user }: { user: User }) {
                 </div>
                 <h3 className="font-bold text-slate-900">Pratinjau Dokumen</h3>
               </div>
-              <button onClick={() => setSelectedFileForPreview(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                <XCircle className="w-6 h-6 text-slate-500" />
-              </button>
+              <div className="flex items-center gap-2">
+                <a 
+                  href={selectedFileForPreview} 
+                  download={`dokumen_${Date.now()}.pdf`}
+                  className="p-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-full transition-colors flex items-center justify-center"
+                  title="Download File"
+                >
+                  <Download className="w-5 h-5" />
+                </a>
+                <button onClick={() => setSelectedFileForPreview(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                  <XCircle className="w-6 h-6 text-slate-500" />
+                </button>
+              </div>
             </div>
             <div className="flex-1 bg-slate-100 relative overflow-hidden">
               {selectedFileForPreview.startsWith('data:application/pdf') || selectedFileForPreview.toLowerCase().includes('.pdf') ? (

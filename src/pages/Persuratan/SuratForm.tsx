@@ -439,6 +439,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           tanggal: result.tanggal,
           file_data: fileUrl,
           signature: signature,
+          source: 'ai', // Distinguish AI entry from manual
           updatedAt: serverTimestamp()
         };
         
@@ -462,6 +463,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           updatedAt: serverTimestamp(),
           buku_nomor_id: bukuId,
           signature: signature,
+          source: 'ai', // Distinguish AI entry from manual
           pimpinan_id: selectedPimpinanId || ''
         };
 

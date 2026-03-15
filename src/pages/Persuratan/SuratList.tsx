@@ -23,7 +23,9 @@ import {
   Calendar,
   Tag,
   Hash,
-  ArrowRight
+  ArrowRight,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { sendNotification } from '../../lib/notifications';
 import { collection, query, onSnapshot, where, orderBy, doc, updateDoc, arrayUnion, serverTimestamp, addDoc, runTransaction, getDoc } from 'firebase/firestore';
@@ -31,7 +33,6 @@ import { db } from '../../lib/firebase';
 import { getFileFromChunks } from '../../lib/db';
 import { clsx } from 'clsx';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
 import { toRoman } from '../../utils';
 import SuratForm from './SuratForm';
 import SignatureModal from '../../components/SignatureModal';
@@ -347,7 +348,18 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                   {item.status === 'approved' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                 </div>
                 <div>
-                  <h3 className="font-mono font-bold text-slate-900">{item.nomor}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-mono font-bold text-slate-900">{item.nomor}</h3>
+                    {(item as any).source === 'ai' ? (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        <Sparkles className="w-3 h-3" /> AI
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        Manual
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.klasifikasi} • {item.tanggal}</p>
                 </div>
               </div>
@@ -426,7 +438,18 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                   <FileText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900">Detail Surat {type === 'masuk' ? 'Masuk' : 'Keluar'}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-900">Detail Surat {type === 'masuk' ? 'Masuk' : 'Keluar'}</h3>
+                    {(selectedSurat as any).source === 'ai' ? (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        <Sparkles className="w-3 h-3" /> AI
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        Manual
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500 font-mono">{selectedSurat.nomor}</p>
                 </div>
               </div>
@@ -534,9 +557,19 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                         </div>
                         <h3 className="font-bold text-slate-900">Pratinjau Dokumen</h3>
                       </div>
-                      <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                        <XCircle className="w-6 h-6 text-slate-500" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <a 
+                          href={previewFile} 
+                          download={`dokumen_${Date.now()}.pdf`}
+                          className="p-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-full transition-colors flex items-center justify-center"
+                          title="Download File"
+                        >
+                          <Download className="w-5 h-5" />
+                        </a>
+                        <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                          <XCircle className="w-6 h-6 text-slate-500" />
+                        </button>
+                      </div>
                     </div>
                     <div className="flex-1 bg-slate-100 relative overflow-auto flex items-center justify-center p-2 md:p-4">
                       {(previewFile.startsWith('data:application/pdf') || previewFile.toLowerCase().includes('.pdf')) ? (
