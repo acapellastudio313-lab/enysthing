@@ -170,7 +170,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           const timeout = setTimeout(() => {
             uploadTask.cancel();
             reject(new Error('Upload timeout. Silakan coba lagi.'));
-          }, 60000); // 60s timeout
+          }, 120000); // 120s timeout
 
           uploadTask.on('state_changed', 
             (snapshot) => {
@@ -257,7 +257,8 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
           type,
           updatedAt: serverTimestamp(),
           buku_nomor_id: bukuId,
-          signature: signature
+          signature: signature,
+          pimpinan_id: selectedPimpinanId || '' // Ensure pimpinan_id is saved
         };
 
         if (!initialData) {
@@ -418,7 +419,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-slate-900 outline-none focus:border-emerald-500 resize-none"
                 />
               </div>
-              {user.persuratan_role === 'pimpinan' && (
+              {type === 'keluar' && (
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
