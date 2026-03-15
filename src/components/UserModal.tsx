@@ -17,7 +17,7 @@ export default function UserModal({ user, onClose, onSave }: UserModalProps) {
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
   const [avatar, setAvatar] = useState(user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username || ''}`);
-  const [role, setRole] = useState<'voter' | 'candidate' | 'admin'>(user?.role || 'voter');
+  const [role, setRole] = useState<User['role']>(user?.role || 'voter');
   const [status, setStatus] = useState<'active' | 'suspended' | 'pending'>(user?.status || 'pending');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -177,7 +177,7 @@ export default function UserModal({ user, onClose, onSave }: UserModalProps) {
                 <select
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none appearance-none"
                   value={role}
-                  onChange={(e) => setRole(e.target.value as 'voter' | 'candidate' | 'admin')}
+                  onChange={(e) => setRole(e.target.value as User['role'])}
                 >
                   <option value="voter">Voter</option>
                   <option value="candidate">Candidate</option>

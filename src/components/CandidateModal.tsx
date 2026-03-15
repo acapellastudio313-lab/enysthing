@@ -115,7 +115,7 @@ export default function CandidateModal({ candidate, onClose, onSave }: Candidate
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none appearance-none disabled:opacity-50"
                   value={userId}
                   onChange={(e) => {
-                    const selected = users.find(u => u.id === Number(e.target.value));
+                    const selected = users.find(u => u.id === e.target.value);
                     setUserId(e.target.value);
                     if (selected) {
                       setName(selected.name);

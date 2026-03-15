@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../../types';
+import { useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Mail as MailIcon, 
@@ -21,6 +22,7 @@ import PersuratanAdmin from './PersuratanAdmin';
 export default function Persuratan({ user }: { user: User }) {
   const [activeSubTab, setActiveSubTab] = useState('persuratan_dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const location = useLocation();
 
   const menuItems = [
     { id: 'persuratan_dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'petugas', 'pimpinan'] },
@@ -32,6 +34,14 @@ export default function Persuratan({ user }: { user: User }) {
   if (user.role === 'admin') {
     menuItems.push({ id: 'persuratan_manajemen_user', label: 'Manajemen User', icon: Users, roles: ['admin'] });
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && menuItems.some(item => item.id === tab)) {
+      setActiveSubTab(tab);
+    }
+  }, [location.search]);
 
   const filteredMenu = menuItems.filter(item => {
     if (user.hidden_menus?.includes(item.id)) return false;

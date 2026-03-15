@@ -142,6 +142,7 @@ export interface Message {
   text: string;
   attachment_url?: string;
   attachment_type?: 'image' | 'video' | 'document';
+  attachment_file_id?: string;
   created_at: string;
   is_read: number;
 }
@@ -190,6 +191,17 @@ export interface Surat {
   file_url?: string;
   nomor_dokumen?: string;
   buku_nomor_id?: string;
+  disposisi_selesai?: boolean;
+  disposisi_selesai_at?: any;
+  disposisi_selesai_by?: string;
+  disposisi?: {
+    note: string;
+    from: string;
+    to: string;
+    toId?: string;
+    createdAt: any;
+    signature?: string;
+  }[];
 }
 
 export interface BukuEntry {

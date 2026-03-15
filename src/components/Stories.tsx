@@ -827,12 +827,15 @@ export default function Stories({ user }: { user: User }) {
             }}>
               <div className={clsx(
                 "w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300",
-                !allViewed ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-orange-500 to-fuchsia-600" : "p-[1px] bg-slate-200"
+                !allViewed ? "p-[3px] bg-gradient-to-tr from-yellow-400 via-orange-500 to-fuchsia-600" : "p-[2px] bg-transparent"
               )}>
                 <img 
                   src={group.user_avatar || 'https://picsum.photos/seed/avatar/48/48'} 
                   alt={group.user_name} 
-                  className="w-full h-full rounded-full object-cover border-2 border-white"
+                  className={clsx(
+                    "w-full h-full rounded-full object-cover",
+                    !allViewed ? "border-2 border-white" : "border border-slate-200"
+                  )}
                 />
               </div>
               <span className="text-xs font-medium text-slate-600 truncate w-16 text-center">{group.user_name.split(' ')[0]}</span>

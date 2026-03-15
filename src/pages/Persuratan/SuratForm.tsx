@@ -18,9 +18,16 @@ let aiClient: GoogleGenAI | null = null;
 // Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
 function getAi(): GoogleGenAI | null {
   // Try to get the API key from various possible environment configurations
-  const apiKey = (process.env && process.env.GEMINI_API_KEY) || 
-                 (import.meta.env && import.meta.env.GEMINI_API_KEY) ||
-                 (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY);
+  let apiKey = '';
+  try {
+    apiKey = process.env.GEMINI_API_KEY || '';
+  } catch (e) {
+    // Ignore ReferenceError if process is not defined
+  }
+  
+  if (!apiKey && import.meta.env) {
+    apiKey = import.meta.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
+  }
                  
   if (!apiKey) {
     console.warn('GEMINI_API_KEY tidak tersedia. Fitur AI dinonaktifkan.');
@@ -213,8 +220,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
 
         // 1. Create/Update Buku Nomor Entry
         const bukuRef = bukuId ? doc(db, 'buku_kendali', bukuId) : doc(collection(db, 'buku_kendali'));
-        const bukuData = {
-          nomor_urut: nextNumber,
+        const bukuData: any = {
           nomor_full: fullNumber,
           nomor_dokumen: originalNomor,
           kode_klasifikasi: result.klasifikasi,
@@ -232,7 +238,8 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
         };
         
         if (!bukuId) {
-          (bukuData as any).createdAt = serverTimestamp();
+          bukuData.nomor_urut = nextNumber;
+          bukuData.createdAt = serverTimestamp();
           transaction.set(bukuRef, bukuData);
           bukuId = bukuRef.id;
         } else {
@@ -410,7 +417,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-slate-900 outline-none focus:border-emerald-500 resize-none"
                 />
               </div>
-              {type === 'keluar' && (
+              {user.persuratan_role === 'pimpinan' && (
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 flex items-center gap-1">

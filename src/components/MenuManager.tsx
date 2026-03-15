@@ -47,8 +47,9 @@ export default function MenuManager({ users, onUsersUpdated }: MenuManagerProps)
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => 
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      u.username.toLowerCase().includes(searchQuery.toLowerCase())
+      u.role !== 'admin' &&
+      (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      u.username.toLowerCase().includes(searchQuery.toLowerCase()))
     );
   }, [users, searchQuery]);
 
@@ -91,7 +92,7 @@ export default function MenuManager({ users, onUsersUpdated }: MenuManagerProps)
   const handleBulkToggle = async (menuId: string, hide: boolean) => {
     if (selectedUserIds.length === 0) return;
     
-    const isAll = selectedUserIds.length === users.length;
+    const isAll = selectedUserIds.length === filteredUsers.length;
     
     setConfirmDialog({
       isOpen: true,
@@ -133,7 +134,7 @@ export default function MenuManager({ users, onUsersUpdated }: MenuManagerProps)
   const handleBulkToggleAllMenus = async (hide: boolean) => {
     if (selectedUserIds.length === 0) return;
     
-    const isAll = selectedUserIds.length === users.length;
+    const isAll = selectedUserIds.length === filteredUsers.length;
     
     setConfirmDialog({
       isOpen: true,

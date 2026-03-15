@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User } from '../../types';
+import { useLocation } from 'react-router-dom';
+import { User, Surat } from '../../types';
 import { 
   Search, 
   Filter, 
@@ -30,33 +31,7 @@ import { clsx } from 'clsx';
 import { toast } from 'sonner';
 import { toRoman } from '../../utils';
 import SuratForm from './SuratForm';
-
-interface Surat {
-  id: string;
-  nomor: string;
-  tanggal: string;
-  pengirim?: string;
-  tujuan?: string;
-  perihal: string;
-  klasifikasi: string;
-  status: 'pending' | 'approved' | 'rejected';
-  type: 'masuk' | 'keluar';
-  authorName: string;
-  createdBy: string;
-  createdAt: any;
-  ringkasan?: string;
-  file_url?: string;
-  nomor_dokumen?: string;
-  buku_nomor_id?: string;
-  disposisi?: {
-    note: string;
-    from: string;
-    to: string;
-    toId?: string;
-    createdAt: any;
-    signature?: string;
-  }[];
-}
+import SignatureModal from '../../components/SignatureModal';
 
 export default function SuratList({ user, type }: { user: User, type: 'masuk' | 'keluar' }) {
   const [surat, setSurat] = useState<Surat[]>([]);
@@ -64,11 +39,14 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showDisposisiModal, setShowDisposisiModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [disposisiNote, setDisposisiNote] = useState('');
   const [tagUserId, setTagUserId] = useState('');
+  const [signature, setSignature] = useState<string | null>(null);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const location = useLocation();
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -112,6 +90,21 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
     return () => unsubscribe();
   }, [type]);
 
+  useEffect(() => {
+    if (surat.length === 0) return;
+    const params = new URLSearchParams(location.search);
+    const suratId = params.get('suratId');
+    if (suratId) {
+      const targetSurat = surat.find(s => s.id === suratId);
+      if (targetSurat) {
+        setSelectedSurat(targetSurat);
+        setShowDetailModal(true);
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname + '?tab=' + params.get('tab'));
+      }
+    }
+  }, [location.search, surat]);
+
   const handleDisposisi = async () => {
     if (!selectedSurat || !tagUserId) {
       toast.error('Harap pilih tujuan disposisi');
@@ -120,30 +113,47 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
     const targetUser = availableUsers.find(u => u.id === tagUserId);
     try {
       await updateDoc(doc(db, 'surat', selectedSurat.id), {
-        status: user.persuratan_role === 'pimpinan' ? 'approved' : 'pending',
         disposisi: arrayUnion({
           note: disposisiNote,
           from: user.name,
           to: targetUser?.name || 'Unknown',
           toId: tagUserId,
           createdAt: new Date(),
-          signature: user.persuratan_role === 'pimpinan' ? 'SIGNED_DIGITAL' : null
+          signature: signature || null
         })
       });
       
       await sendNotification(
         tagUserId,
         `Disposisi baru dari ${user.name}: ${disposisiNote}`,
-        `/apps/persuratan`
+        `/apps/persuratan?tab=persuratan_surat_${type}&suratId=${selectedSurat.id}`
       );
 
       toast.success('Disposisi berhasil dikirim');
       setShowDisposisiModal(false);
       setDisposisiNote('');
       setTagUserId('');
+      setSignature(null);
     } catch (err) {
       console.error(err);
       toast.error('Gagal mengirim disposisi');
+    }
+  };
+
+  const handleAkhiriDisposisi = async () => {
+    if (!selectedSurat) return;
+    try {
+      await updateDoc(doc(db, 'surat', selectedSurat.id), {
+        status: 'approved',
+        disposisi_selesai: true,
+        disposisi_selesai_at: serverTimestamp(),
+        disposisi_selesai_by: user.name
+      });
+      toast.success('Disposisi berhasil diakhiri');
+      setShowDetailModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal mengakhiri disposisi');
     }
   };
 
@@ -494,7 +504,17 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
                 {selectedSurat.buku_nomor_id ? 'Sudah di Buku' : 'Tuskan ke Buku'}
               </button>
               
-              {user.role === 'admin' && (
+              {selectedSurat.status !== 'approved' && !selectedSurat.disposisi_selesai && (
+                <button 
+                  onClick={handleAkhiriDisposisi}
+                  className="flex-1 min-w-[140px] py-3 bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-bold hover:bg-emerald-200 transition-colors flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Akhiri Disposisi
+                </button>
+              )}
+              
+              {(user.role === 'admin' || user.persuratan_role === 'petugas') && (
                 <>
                   <button 
                     onClick={() => { setShowDetailModal(false); setShowEditModal(true); }}
@@ -560,25 +580,23 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
                 </div>
               </div>
 
-              {user.persuratan_role === 'pimpinan' && (
-                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white rounded-xl shadow-sm">
-                      <PenTool className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-emerald-900">Tanda Tangan Digital</p>
-                      <p className="text-[10px] text-emerald-600">Otomatis dibubuhkan saat disetujui</p>
-                    </div>
-                  </div>
-                  <QrCode className="w-8 h-8 text-emerald-700 opacity-50" />
-                </div>
-              )}
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Tanda Tangan (Opsional)</label>
+                <button 
+                  onClick={() => setShowSignatureModal(true)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 outline-none focus:border-emerald-500 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2 font-bold text-sm">
+                    <PenTool className="w-4 h-4" /> {signature ? 'Tanda Tangan Tersimpan' : 'Buat/Unggah Tanda Tangan'}
+                  </span>
+                  {signature && <img src={signature} alt="Signature" className="h-8 object-contain" />}
+                </button>
+              </div>
             </div>
 
             <div className="p-6 bg-slate-50 flex gap-3">
               <button 
-                onClick={() => setShowDisposisiModal(false)}
+                onClick={() => { setShowDisposisiModal(false); setSignature(null); }}
                 className="flex-1 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 Batal
@@ -593,6 +611,13 @@ export default function SuratList({ user, type }: { user: User, type: 'masuk' | 
           </div>
         </div>
       )}
+
+      <SignatureModal 
+        isOpen={showSignatureModal} 
+        onClose={() => setShowSignatureModal(false)} 
+        onSave={(sig) => { setSignature(sig); setShowSignatureModal(false); }}
+      />
+
       {/* Edit Modal */}
       {showEditModal && selectedSurat && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
