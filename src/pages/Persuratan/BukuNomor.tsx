@@ -327,7 +327,7 @@ export default function BukuNomor({ user }: { user: User }) {
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nomor Terakhir ({activeType})</p>
-            <p className="text-lg font-bold text-slate-900">{filteredEntries[0]?.nomor_full || '-'}</p>
+            <p className="text-lg font-bold text-slate-900">{filteredEntries[0]?.nomor_dokumen || filteredEntries[0]?.nomor_full || '-'}</p>
           </div>
         </div>
         <div className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-4">
@@ -351,38 +351,41 @@ export default function BukuNomor({ user }: { user: User }) {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              placeholder="Cari nomor atau perihal..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <select 
-              className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            >
-              <option value="all">Semua Waktu</option>
-              <option value="today">Hari Ini</option>
-              <option value="7days">7 Hari Terakhir</option>
-              <option value="month">Bulan Ini</option>
-              <option value="year">Tahun Ini</option>
-            </select>
-          </div>
+      {/* Search & Filter */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input 
+            placeholder="Cari nomor atau perihal..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:border-emerald-500 shadow-sm"
+          />
         </div>
+        <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
+          <Filter className="w-5 h-5" />
+          <select 
+            className="bg-transparent outline-none"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="all">Semua Waktu</option>
+            <option value="today">Hari Ini</option>
+            <option value="7days">7 Hari Terakhir</option>
+            <option value="month">Bulan Ini</option>
+            <option value="year">Tahun Ini</option>
+          </select>
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-widest">
               <tr>
-                <th className="px-6 py-5">Nomor Urut / Full</th>
-                <th className="px-6 py-5">Nomor Dokumen (File Upload)</th>
+                <th className="px-6 py-5">Nomor Urut</th>
+                <th className="px-6 py-5">Nomor Dokumen</th>
                 <th className="px-6 py-5">Kode Klasifikasi</th>
                 <th className="px-6 py-5">Tanggal</th>
                 <th className="px-6 py-5">Perihal</th>
@@ -401,20 +404,11 @@ export default function BukuNomor({ user }: { user: User }) {
                 >
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-bold text-slate-400">#{entry.nomor_urut}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">{entry.nomor_full}</span>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(entry.nomor_full); toast.success('Nomor disalin'); }}
-                          className="p-1 text-slate-300 hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Copy className="w-3 h-3" />
-                        </button>
-                      </div>
+                      <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">#{entry.nomor_urut}</span>
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <span className="text-xs font-mono font-bold text-slate-600 whitespace-nowrap bg-slate-100 px-2 py-1 rounded-md">{entry.nomor_dokumen || '-'}</span>
+                    <span className="text-xs font-mono font-bold text-slate-600 whitespace-nowrap bg-slate-100 px-2 py-1 rounded-md">{entry.nomor_full || '-'}</span>
                   </td>
                   <td className="px-6 py-5">
                     <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">{entry.kode_klasifikasi || '-'}</span>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Pimpinan } from '../../types';
-import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool } from 'lucide-react';
+import { Camera, Upload, FileText, XCircle, FileCheck, Sparkles, Loader2, Hash, Calendar, User as UserIcon, PenTool, Eye } from 'lucide-react';
 import SignatureModal from '../../components/SignatureModal';
 import { toast } from 'sonner';
 import { sendNotification } from '../../lib/notifications';
@@ -68,6 +68,7 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
   const [selectedPimpinanId, setSelectedPimpinanId] = useState(initialData?.pimpinan_id || '');
   const [signature, setSignature] = useState<string | null>(initialData?.signature || null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -341,12 +342,34 @@ export default function SuratForm({ user, type, onSuccess, initialData }: SuratF
                 <p className="text-[10px] text-slate-500 uppercase font-bold">{(file.size / 1024).toFixed(2)} KB</p>
               </div>
             </div>
-            <button onClick={() => { setFile(null); setResult(null); }} className="text-slate-400 hover:text-red-500 transition-colors">
-              <XCircle className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPreviewFile(URL.createObjectURL(file))} className="text-emerald-600 hover:text-emerald-700 transition-colors">
+                <Eye className="w-5 h-5" />
+              </button>
+              <button onClick={() => { setFile(null); setResult(null); }} className="text-slate-400 hover:text-red-500 transition-colors">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl h-[80vh] rounded-2xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="font-bold">Preview Dokumen</h3>
+              <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-100 rounded-full">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <iframe src={previewFile} className="w-full h-full" title="Preview" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {result && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm animate-in zoom-in-95 duration-300">

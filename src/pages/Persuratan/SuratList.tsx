@@ -36,6 +36,7 @@ import SignatureModal from '../../components/SignatureModal';
 export default function SuratList({ user, type, suratId }: { user: User, type: 'masuk' | 'keluar', suratId?: string | null }) {
   const [surat, setSurat] = useState<Surat[]>([]);
   const [selectedSurat, setSelectedSurat] = useState<Surat | null>(null);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showDisposisiModal, setShowDisposisiModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -467,15 +468,13 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Dokumen Lampiran</label>
                   {selectedSurat.file_data ? (
                     <div className="flex items-center gap-3">
-                      <a 
-                        href={selectedSurat.file_data} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
+                      <button 
+                        onClick={() => setPreviewFile(selectedSurat.file_data || null)}
                         className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
                       >
-                        <ExternalLinkIcon className="w-4 h-4" />
+                        <Eye className="w-4 h-4" />
                         Lihat Dokumen
-                      </a>
+                      </button>
                       <a 
                         href={selectedSurat.file_data} 
                         download="lampiran_surat.pdf"
@@ -491,6 +490,23 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
                   )}
                 </div>
               </div>
+
+              {/* Preview Modal */}
+              {previewFile && (
+                <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-4">
+                  <div className="bg-white w-full max-w-4xl h-[80vh] rounded-2xl overflow-hidden flex flex-col">
+                    <div className="p-4 border-b flex justify-between items-center">
+                      <h3 className="font-bold">Preview Dokumen</h3>
+                      <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-slate-100 rounded-full">
+                        <XCircle className="w-6 h-6" />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                      <iframe src={previewFile} className="w-full h-full" title="Preview" />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Disposisi History */}
               {selectedSurat.disposisi && selectedSurat.disposisi.length > 0 && (
@@ -684,7 +700,7 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
 
       {/* Confirmation Modal */}
       {confirmDialog.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmDialog.title}</h3>
             <p className="text-slate-600 mb-6">{confirmDialog.message}</p>
