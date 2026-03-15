@@ -153,10 +153,12 @@ export default function SuratList({ user, type, suratId }: { user: User, type: '
         })
       });
       
+      const link = `/apps/persuratan?tab=persuratan_surat_${type}&suratId=${selectedSurat.id}`;
+      console.log('DEBUG: Sending notification with link:', link);
       await sendNotification(
         tagUserId,
         `Disposisi baru dari ${user.name} untuk surat nomor ${selectedSurat.nomor}: ${disposisiNote}`,
-        `/apps/persuratan?tab=persuratan_surat_${type}&suratId=${selectedSurat.id}`
+        link
       );
 
       toast.success('Disposisi berhasil dikirim');

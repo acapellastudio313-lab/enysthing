@@ -1255,6 +1255,9 @@ export default function BukuNomor({ user }: { user: User }) {
                   onChange={e => setSelectedEntry({...selectedEntry, nomor_full: e.target.value})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-emerald-500"
                 />
+                <p className="text-[10px] text-slate-500 mt-2">
+                  Catatan: Mohon tidak mengubah bagian nomor urut (bagian pertama) agar tidak merusak urutan penomoran.
+                </p>
               </div>
             </div>
 
