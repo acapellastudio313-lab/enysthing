@@ -15,12 +15,12 @@ let aiClient: GoogleGenAI | null = null;
 // Inisialisasi Gemini di sisi client harus dilakukan dengan hati-hati.
 // Jika GEMINI_API_KEY tidak tersedia di browser, jangan inisialisasi SDK.
 function getAi(): GoogleGenAI | null {
-  // Use VITE_GEMINI_API_KEY for Vite/Vercel production builds
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  // Use VITE_GEMINI_API_KEY or GEMINI_API_KEY for Vite/Vercel production builds
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
                  
   if (!apiKey) {
-    console.error('DEBUG: VITE_GEMINI_API_KEY tidak ditemukan di import.meta.env!');
-    toast.error('Fitur AI tidak tersedia: API Key tidak ditemukan. Pastikan VITE_GEMINI_API_KEY diatur di Vercel.');
+    console.error('DEBUG: API Key tidak ditemukan di import.meta.env!');
+    toast.error('Fitur AI tidak tersedia: API Key tidak ditemukan. Pastikan VITE_GEMINI_API_KEY atau GEMINI_API_KEY diatur di Vercel.');
     return null;
   }
   
